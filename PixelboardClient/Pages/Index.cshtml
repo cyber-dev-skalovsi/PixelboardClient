@@ -1,10 +1,55 @@
 ﻿@page
 @model IndexModel
 @{
-    ViewData["Title"] = "Home page";
+    ViewData["Title"] = "Pixelboard Client";
 }
 
 <div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+    <h1 class="display-4">Pixelboard</h1>
+    <p class="lead">Modul 321 - Verteilte Systeme programmieren</p>
 </div>
+
+@if (Model.ErrorMessage != null)
+{
+    <div class="alert alert-danger" role="alert">
+        <strong>Fehler:</strong> @Model.ErrorMessage
+    </div>
+}
+
+@if (Model.IsLoading)
+{
+    <div class="text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Lädt...</span>
+        </div>
+        <p>Lade Pixelboard...</p>
+    </div>
+}
+else if (Model.Pixels != null)
+{
+    <div class="board-wrapper">
+        <div class="board-container">
+            @for (int y = 0; y < Model.Pixels.GetLength(1); y++)
+            {
+                @for (int x = 0; x < Model.Pixels.GetLength(0); x++)
+                {
+                    var pixel = Model.Pixels[x, y];
+                    <div class="pixel"
+                         style="background-color: rgb(@pixel.Red, @pixel.Green, @pixel.Blue);"
+                         title="(@x, @y) - RGB(@pixel.Red, @pixel.Green, @pixel.Blue)">
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="mt-4 text-center">
+        <a href="/" class="btn btn-primary">Neu laden</a>
+    </div>
+}
+else
+{
+    <div class="alert alert-warning">
+        Keine Daten verfügbar. Bitte laden Sie die Seite neu.
+    </div>
+}
