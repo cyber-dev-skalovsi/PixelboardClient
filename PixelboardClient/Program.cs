@@ -1,14 +1,11 @@
 var builder = WebApplication.CreateBuilder(args);
 
-// Razor Pages hinzufügen
 builder.Services.AddRazorPages();
 
-// HttpClient für PixelboardService registrieren
 builder.Services.AddHttpClient<PixelboardClient.Services.PixelboardService>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
