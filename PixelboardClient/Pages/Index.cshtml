@@ -6,10 +6,7 @@
 
 <div class="container">
     <header class="header">
-        <h1>
-            PIXELBOARD CLIENT
-            <span class="badge dev-badge" environment="Development">DEV</span>
-        </h1>
+        <h1>PIXELBOARD CLIENT</h1>
     </header>
 
     @if (Model.ErrorMessage != null)
@@ -20,51 +17,18 @@
         </div>
     }
 
-    <div class="mode-buttons text-center mb-4">
-        <button class="btn mode-btn active" data-mode="cache">Cache</button>
-        <button class="btn mode-btn" data-mode="parallel">Parallel</button>
-        <button class="btn mode-btn" data-mode="sequential">Sequentiell</button>
-    </div>
-
     <div class="status-card mb-5">
         <div class="card-header">
-            <strong>Status Dashboard</strong>
+            <strong>Status</strong>
         </div>
         <div class="card-body">
             <div class="status-grid">
                 <div>
-                    <small class="text-muted">Ladezeit (aktiv)</small>
+                    <small class="text-muted">Ladezeit</small>
                     <strong class="text-success">@Model.LoadTimeMs ms</strong>
                 </div>
             </div>
-
-            <div class="action-buttons mt-4">
-                <button class="btn btn-primary btn-sm me-2" onclick="location.reload(true)">
-                    Seite neu laden
-                </button>
-                <button class="btn btn-outline-secondary btn-sm me-2" onclick="clearCacheAndReload()">
-                    Cache löschen & neu laden
-                </button>
-                <button class="btn btn-success btn-sm" onclick="startGame()">
-                    Start Game
-                </button>
-            </div>
-
-            <hr class="my-4" />
-
-            <div class="activity-log-section">
-                <strong class="d-block mb-2">Activity Log</strong>
-                <div id="logBox" class="log-content">
-                    <div class="log-placeholder text-muted fst-italic">Noch keine Aktionen...</div>
-                </div>
-            </div>
         </div>
-    </div>
-
-    <div class="team-section text-center mb-5">
-        <label for="teamNumber" class="form-label fw-bold">Team Nummer</label>
-        <input type="number" id="teamNumber" class="form-control team-input mx-auto"
-               value="@Model.TeamNumber" min="1" max="10" style="max-width: 140px;" />
     </div>
 
     <div class="board-wrapper text-center">
@@ -78,9 +42,7 @@
                         var pixel = Model.Pixels[x, y];
                         <div class="pixel"
                              id="pixel-@x-@y"
-                             data-x="@x" data-y="@y"
-                             style="background-color: rgb(@(pixel?.Red ?? 0), @(pixel?.Green ?? 0), @(pixel?.Blue ?? 0));"
-                             onclick="setPixel(@x, @y)">
+                             style="background-color: rgb(@(pixel?.Red ?? 0), @(pixel?.Green ?? 0), @(pixel?.Blue ?? 0));">
                         </div>
                     }
                 }
@@ -89,178 +51,3 @@
         <div class="board-label mt-3">PIXELBOARD <small>(16 × 16)</small></div>
     </div>
 </div>
-
-@section Scripts {
-    <script>
-        let logCounter = 0;
-        let initialLoadDone = false;
-        let currentMode = 'cache';
-
-        function addLog(message, type = 'info') {
-            logCounter++;
-            const logBox = document.getElementById('logBox');
-            const timestamp = new Date().toLocaleTimeString('de-CH');
-
-            if (logCounter === 1) {
-                logBox.innerHTML = '';
-            }
-
-            const colors = {
-                'info': '#0dcaf0',
-                'success': '#198754',
-                'error': '#dc3545',
-                'warning': '#ffc107'
-            };
-
-            const logEntry = document.createElement('div');
-            logEntry.style.marginBottom = '5px';
-            logEntry.style.borderLeft = `3px solid ${colors[type] || colors['info']}`;
-            logEntry.style.paddingLeft = '8px';
-            logEntry.innerHTML = `<small>[${timestamp}] ${message}</small>`;
-
-            logBox.insertBefore(logEntry, logBox.firstChild);
-
-            while (logBox.children.length > 10) {
-                logBox.removeChild(logBox.lastChild);
-            }
-        }
-
-        function clearCacheAndReload() {
-            setTimeout(() => {
-                location.reload(true);
-            }, 500);
-            addLog("Cache gelöscht & Seite wird neu geladen", "info");
-            location.reload(true);
-        }
-
-        function startGame() {
-            addLog("Game-Modus aktiviert (Platzhalter)", "success");
-        }
-
-        async function setPixel(x, y) {
-            const team = document.getElementById('teamNumber').value;
-
-            addLog(`Pixel (${x},${y}) wird gesetzt...`, 'info');
-
-            try {
-                const response = await fetch('/api/pixel/set', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ x: x, y: y, team: parseInt(team) })
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    addLog(`HTTP ${response.status}: ${errorText}`, 'error');
-                    return;
-                }
-
-                const result = await response.json();
-
-                if (result.success) {
-                    addLog(`Pixel (${x},${y}) erfolgreich gesetzt!`, 'success');
-
-                    const element = document.getElementById(`pixel-${x}-${y}`);
-                    if (element) {
-                        if (result.red !== undefined && result.green !== undefined && result.blue !== undefined) {
-                            const rgbColor = `rgb(${result.red}, ${result.green}, ${result.blue})`;
-                            element.style.backgroundColor = rgbColor;
-                            addLog(`Farbe aktualisiert: RGB(${result.red}, ${result.green}, ${result.blue})`, 'info');
-                        }
-
-                        element.style.opacity = '0.5';
-                        element.style.transform = 'scale(0.9)';
-                        setTimeout(() => {
-                            element.style.opacity = '1';
-                            element.style.transform = 'scale(1)';
-                        }, 300);
-                    }
-                } else {
-                    addLog(`Fehler: ${result.error}`, 'error');
-                }
-            } catch (error) {
-                addLog(`Request Fehler: ${error.message}`, 'error');
-                console.error('Request Fehler:', error);
-            }
-        }
-
-        async function loadPixelsByMode(mode) {
-            currentMode = mode;
-            
-            document.querySelectorAll('.mode-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
-
-            addLog(`Lade Pixels im Modus: ${mode}...`, 'info');
-
-            try {
-                const response = await fetch(`/index?handler=LoadPixels&mode=${mode}`);
-                const result = await response.json();
-
-                if (!result.success) {
-                    addLog(`Fehler beim Laden: ${result.error}`, 'error');
-                    return;
-                }
-
-                addLog(`Pixels geladen in ${result.loadTimeMs}ms (${mode})`, 'success');
-                updatePixels(result.pixels);
-
-                document.querySelector('.text-success').textContent = `${result.loadTimeMs} ms`;
-            } catch (error) {
-                addLog(`Request Fehler: ${error.message}`, 'error');
-                console.error('Load Error:', error);
-            }
-        }
-
-        function updatePixels(pixelList) {
-            pixelList.forEach(p => {
-                const element = document.getElementById(`pixel-${p.x}-${p.y}`);
-                if (element) {
-                    const rgbColor = `rgb(${p.red}, ${p.green}, ${p.blue})`;
-                    element.style.backgroundColor = rgbColor;
-                }
-            });
-        }
-
-        function checkIfBoardIsBlack() {
-            let allBlack = true;
-            let coloredPixels = 0;
-
-            for (let x = 0; x < 16; x++) {
-                for (let y = 0; y < 16; y++) {
-                    const element = document.getElementById(`pixel-${x}-${y}`);
-                    if (element) {
-                        const bgColor = element.style.backgroundColor;
-                        if (bgColor !== 'rgb(0, 0, 0)' && bgColor !== 'rgb(0,0,0)' && bgColor !== '') {
-                            allBlack = false;
-                            coloredPixels++;
-                        }
-                    }
-                }
-            }
-
-            if (allBlack && !initialLoadDone) {
-                addLog('Board ist noch schwarz. Drücken Sie F5 zum Neuladen.', 'warning');
-            } else {
-                initialLoadDone = true;
-                addLog(`Board geladen mit ${coloredPixels} farbigen Pixels!`, 'success');
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', () => {
-            addLog('Seite geladen! Pixelboard bereit.', 'success');
-
-            document.querySelectorAll('.mode-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const mode = this.getAttribute('data-mode');
-                    loadPixelsByMode(mode);
-                });
-            });
-
-            setTimeout(checkIfBoardIsBlack, 500);
-        });
-    </script>
-}

@@ -53,75 +53,12 @@ namespace PixelboardClient.Services
             }
         }
 
-        public async Task<(PixelColor[,] pixels, long elapsedMs)> LoadPixelsParallelAsync()
-        {
-            var stopwatch = Stopwatch.StartNew();
-            var client = _httpClientFactory.CreateClient();
-            client.Timeout = TimeSpan.FromSeconds(30);
-
-            var tasks = new List<Task<(int x, int y, PixelColor? color)>>();
-
-            for (int x = 0; x < 16; x++)
-            {
-                for (int y = 0; y < 16; y++)
-                {
-                    int capturedX = x;
-                    int capturedY = y;
-                    tasks.Add(FetchPixelAsync(client, capturedX, capturedY));
-                }
-            }
-
-            var results = await Task.WhenAll(tasks);
-            var pixels = new PixelColor[16, 16];
-
-            foreach (var (x, y, color) in results)
-            {
-                pixels[x, y] = color ?? new PixelColor(0, 0, 0);
-            }
-
-            stopwatch.Stop();
-            return (pixels, stopwatch.ElapsedMilliseconds);
-        }
-
-        public async Task<(PixelColor[,] pixels, long elapsedMs)> LoadPixelsSequentialAsync()
-        {
-            var stopwatch = Stopwatch.StartNew();
-            var client = _httpClientFactory.CreateClient();
-            client.Timeout = TimeSpan.FromSeconds(30);
-            var pixels = new PixelColor[16, 16];
-
-            for (int x = 0; x < 16; x++)
-            {
-                for (int y = 0; y < 16; y++)
-                {
-                    var (_, _, color) = await FetchPixelAsync(client, x, y);
-                    pixels[x, y] = color ?? new PixelColor(0, 0, 0);
-                }
-            }
-
-            stopwatch.Stop();
-            return (pixels, stopwatch.ElapsedMilliseconds);
-        }
-
-        public async Task<(PixelColor[,] pixels, long elapsedMs)> LoadPixelsCachedAsync()
-        {
-            var stopwatch = Stopwatch.StartNew();
-
-            lock (_lock)
-            {
-                var cachedPixels = (PixelColor[,])_pixels.Clone();
-                stopwatch.Stop();
-                return (cachedPixels, stopwatch.ElapsedMilliseconds);
-            }
-        }
-
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             await Task.Delay(1000, stoppingToken);
 
             _apiUrl = _configuration["ApiUrl"];
-            _logger.LogInformation("BoardStateService gestartet mit API URL: {url} (GraphQL: {gql})",
-                _apiUrl, _useGraphQL);
+            _logger.LogInformation("BoardStateService gestartet mit API URL: {url}", _apiUrl);
 
             await LoadPixelsAsync();
 
@@ -173,9 +110,7 @@ namespace PixelboardClient.Services
             }
 
             stopwatch.Stop();
-            _logger.LogInformation("Alle 256 Pixels geladen in {ms}ms (Methode: {method})",
-                stopwatch.ElapsedMilliseconds,
-                _useGraphQL ? "GraphQL" : "REST");
+            _logger.LogInformation("Alle 256 Pixels geladen in {ms}ms", stopwatch.ElapsedMilliseconds);
         }
 
         private async Task LoadPixelsRestAsync()
