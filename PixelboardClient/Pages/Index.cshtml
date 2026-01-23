@@ -140,7 +140,7 @@
         async function setPixel(x, y) {
             const team = document.getElementById('teamNumber').value;
 
-            addLog(`Versuche Pixel (${x},${y}) zu setzen für Team ${team}...`, 'info');
+            addLog(`Pixel (${x},${y}) wird gesetzt...`, 'info');
 
             try {
                 const response = await fetch('/api/pixel/set', {
@@ -164,6 +164,12 @@
 
                     const element = document.getElementById(`pixel-${x}-${y}`);
                     if (element) {
+                        if (result.red !== undefined && result.green !== undefined && result.blue !== undefined) {
+                            const rgbColor = `rgb(${result.red}, ${result.green}, ${result.blue})`;
+                            element.style.backgroundColor = rgbColor;
+                            addLog(`Farbe aktualisiert: RGB(${result.red}, ${result.green}, ${result.blue})`, 'info');
+                        }
+
                         element.style.opacity = '0.5';
                         element.style.transform = 'scale(0.9)';
                         setTimeout(() => {

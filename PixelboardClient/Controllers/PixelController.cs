@@ -51,7 +51,52 @@ namespace PixelboardClient.Controllers
 
                 if (response.IsSuccessStatusCode)
                 {
-                    return Ok(new { success = true, message = responseBody });
+                    var colorResponse = await client.GetAsync($"{apiUrl}/api/color/{request.X}/{request.Y}");
+                    
+                    if (colorResponse.IsSuccessStatusCode)
+                    {
+                        var colorContent = await colorResponse.Content.ReadAsStringAsync();
+                        
+                        try
+                        {
+                            var colorData = JsonSerializer.Deserialize<JsonElement>(colorContent);
+                            
+                            int red = 0, green = 0, blue = 0;
+                            
+                            if (colorData.TryGetProperty("red", out var redElement))
+                                red = redElement.GetInt32();
+                            else if (colorData.TryGetProperty("Red", out redElement))
+                                red = redElement.GetInt32();
+                            
+                            if (colorData.TryGetProperty("green", out var greenElement))
+                                green = greenElement.GetInt32();
+                            else if (colorData.TryGetProperty("Green", out greenElement))
+                                green = greenElement.GetInt32();
+                            
+                            if (colorData.TryGetProperty("blue", out var blueElement))
+                                blue = blueElement.GetInt32();
+                            else if (colorData.TryGetProperty("Blue", out blueElement))
+                                blue = blueElement.GetInt32();
+                            
+                            return Ok(new
+                            {
+                                success = true,
+                                message = responseBody,
+                                red = red,
+                                green = green,
+                                blue = blue
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Fehler beim Parsen der Farbe: {content}", colorContent);
+                            return Ok(new { success = true, message = responseBody });
+                        }
+                    }
+                    else
+                    {
+                        return Ok(new { success = true, message = responseBody });
+                    }
                 }
                 else
                 {
