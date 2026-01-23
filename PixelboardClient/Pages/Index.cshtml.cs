@@ -3,138 +3,100 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using PixelboardClient.Models;
 using PixelboardClient.Services;
 using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 
 namespace PixelboardClient.Pages
 {
     public class IndexModel : PageModel
     {
         private readonly ILogger<IndexModel> _logger;
-        private readonly PixelboardService _pixelboardService;
+        private readonly IBoardStateService _boardStateService;
         private readonly IConfiguration _configuration;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public PixelColor[,]? Pixels { get; set; }
+        public PixelColor[,] Pixels { get; set; } = new PixelColor[16, 16];
         public string? ErrorMessage { get; set; }
-        public bool IsLoading { get; set; }
-        public long? LoadTimeMs { get; set; }
-        public string? LoadMethod { get; set; }
-        public int TotalPixels => 16 * 16;
-        public string CurrentEnvironment { get; set; }
-        public string ApiBaseUrl { get; set; }
+        public long LoadTimeMs { get; set; }
+        public bool UseCache { get; set; } = true;
+        public string? ApiUrl { get; set; }  // ✅ NEU
 
         [BindProperty]
-        public int SelectedX { get; set; }
-
-        [BindProperty]
-        public int SelectedY { get; set; }
-
-        [BindProperty]
-        public int Red { get; set; } = 255;
-
-        [BindProperty]
-        public int Green { get; set; } = 0;
-
-        [BindProperty]
-        public int Blue { get; set; } = 0;
-
-        public string? SetPixelResult { get; set; }
+        public int TeamNumber { get; set; } = 1;
 
         public IndexModel(
             ILogger<IndexModel> logger,
-            PixelboardService pixelboardService,
+            IBoardStateService boardStateService,
             IConfiguration configuration,
-            IWebHostEnvironment environment)
+            IHttpClientFactory httpClientFactory)
         {
             _logger = logger;
-            _pixelboardService = pixelboardService;
+            _boardStateService = boardStateService;
             _configuration = configuration;
-            CurrentEnvironment = environment.EnvironmentName;
-            ApiBaseUrl = _configuration["ApiSettings:BaseUrl"] ?? "Unknown";
+            _httpClientFactory = httpClientFactory;
         }
 
         public void OnGet()
         {
-            // Zeige leeres Board beim ersten Laden
-            _logger.LogInformation("Index-Seite geladen");
+            var stopwatch = Stopwatch.StartNew();
+
+            // Lade Pixels aus dem Cache
+            Pixels = _boardStateService.GetAllPixels();
+
+            // ✅ NEU: API URL anzeigen
+            ApiUrl = _configuration["ApiUrl"];
+
+            stopwatch.Stop();
+            LoadTimeMs = stopwatch.ElapsedMilliseconds;
+
+            _logger.LogInformation("Index Seite geladen in {ms}ms (mit Cache)", LoadTimeMs);
         }
 
-        public async Task<IActionResult> OnPostLoadParallelAsync()
+        [IgnoreAntiforgeryToken]
+        public async Task<IActionResult> OnPostSetPixelAsync(int x, int y, int team)
         {
             try
             {
-                _logger.LogInformation("Starte paralleles Laden...");
-                var stopwatch = Stopwatch.StartNew();
-                Pixels = await _pixelboardService.GetBoardParallelAsync();
-                stopwatch.Stop();
+                var apiUrl = _configuration["ApiUrl"];
+                var client = _httpClientFactory.CreateClient();
 
-                LoadTimeMs = stopwatch.ElapsedMilliseconds;
-                LoadMethod = "Parallel";
-
-                _logger.LogInformation($"Parallel geladen in {LoadTimeMs}ms");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Fehler beim parallelen Laden");
-                ErrorMessage = $"Fehler beim parallelen Laden: {ex.Message}";
-            }
-
-            return Page();
-        }
-
-        public async Task<IActionResult> OnPostLoadSequentialAsync()
-        {
-            try
-            {
-                _logger.LogInformation("Starte sequenzielles Laden...");
-                var stopwatch = Stopwatch.StartNew();
-                Pixels = await _pixelboardService.GetBoardSequentialAsync();
-                stopwatch.Stop();
-
-                LoadTimeMs = stopwatch.ElapsedMilliseconds;
-                LoadMethod = "Sequenziell (1 nach dem anderen)";
-
-                _logger.LogInformation($"Sequenziell geladen in {LoadTimeMs}ms");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Fehler beim sequenziellen Laden");
-                ErrorMessage = $"Fehler beim sequenziellen Laden: {ex.Message}";
-            }
-
-            return Page();
-        }
-
-        public async Task<IActionResult> OnPostSetPixelAsync()
-        {
-            try
-            {
-                _logger.LogInformation($"Versuche Pixel ({SelectedX},{SelectedY}) zu setzen auf RGB({Red},{Green},{Blue})");
-
-                var success = await _pixelboardService.SetPixelAsync(
-                    SelectedX, SelectedY, Red, Green, Blue);
-
-                if (success)
+                var payload = new
                 {
-                    SetPixelResult = $"✓ Pixel ({SelectedX},{SelectedY}) erfolgreich auf RGB({Red},{Green},{Blue}) gesetzt!";
+                    x = x,
+                    y = y,
+                    team = team
+                };
 
-                    // Board neu laden um Änderung zu sehen
-                    var stopwatch = Stopwatch.StartNew();
-                    Pixels = await _pixelboardService.GetBoardParallelAsync();
-                    stopwatch.Stop();
-                    LoadTimeMs = stopwatch.ElapsedMilliseconds;
-                    LoadMethod = "Parallel (nach Pixel setzen)";
+                var jsonContent = JsonSerializer.Serialize(payload);
+                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+                var response = await client.PostAsync($"{apiUrl}/api/color", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Pixel ({x},{y}) erfolgreich gesetzt für Team {team}. Response: {response}",
+                        x, y, team, responseBody);
+
+                    return new JsonResult(new { success = true, message = responseBody });
                 }
                 else
                 {
-                    SetPixelResult = "✗ Fehler beim Setzen des Pixels. Prüfen Sie die Logs.";
+                    _logger.LogWarning("Fehler beim Setzen von Pixel ({x},{y}): Status {status}, Body: {body}",
+                        x, y, response.StatusCode, responseBody);
+
+                    return new JsonResult(new
+                    {
+                        success = false,
+                        error = $"Status: {response.StatusCode}, Message: {responseBody}"
+                    });
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception beim Setzen des Pixels");
-                SetPixelResult = $"✗ Fehler: {ex.Message}";
+                _logger.LogError(ex, "Exception beim Setzen von Pixel ({x},{y})", x, y);
+                return new JsonResult(new { success = false, error = ex.Message });
             }
-
-            return Page();
         }
     }
 }

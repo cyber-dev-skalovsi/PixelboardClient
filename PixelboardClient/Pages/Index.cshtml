@@ -4,285 +4,189 @@
     ViewData["Title"] = "Pixelboard Client";
 }
 
-<div class="container-fluid">
-    <div class="header-section">
-        <h1 class="display-4">🎨 Pixelboard Client</h1>
-        <p class="lead">Modul 321 - Verteilte Systeme programmieren</p>
-        <div class="environment-info">
-            <span class="badge bg-info">Umgebung: @Model.CurrentEnvironment</span>
-            <span class="badge bg-secondary">API: @Model.ApiBaseUrl</span>
-        </div>
-    </div>
+<div class="text-center">
+    <h1 class="display-4">
+        Pixelboard
+        <environment include="Development">
+            <span class="badge bg-warning text-dark">DEV</span>
+        </environment>
+    </h1>
 
     @if (Model.ErrorMessage != null)
     {
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <strong><i class="bi bi-exclamation-triangle"></i> Fehler:</strong> @Model.ErrorMessage
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="alert alert-danger">
+            @Model.ErrorMessage
         </div>
     }
 
-    <!-- Steuerungsbereich - Laden -->
-    <div class="control-panel">
-        <h4><i class="bi bi-download"></i> Pixelboard laden</h4>
-        <div class="row g-3">
-            <div class="col-md-6">
-                <form method="post" asp-page-handler="LoadParallel">
-                    <button type="submit" class="btn btn-primary btn-lg w-100">
-                        <i class="bi bi-lightning-charge"></i> Parallel laden (Schnell)
-                    </button>
-                </form>
-            </div>
-            <div class="col-md-6">
-                <form method="post" asp-page-handler="LoadSequential">
-                    <button type="submit" class="btn btn-secondary btn-lg w-100">
-                        <i class="bi bi-list-ol"></i> Sequenziell laden (1 nach dem anderen)
-                    </button>
-                </form>
-            </div>
+    <!-- INFO BOX -->
+    <div class="card mb-3" style="max-width: 600px; margin: 0 auto;">
+        <div class="card-header bg-info text-white">
+            <strong>📊 Pixelboard Status</strong>
         </div>
-
-        @if (Model.LoadTimeMs.HasValue)
-        {
-            <div class="performance-info">
-                <div class="alert alert-success">
-                    <strong>✓ Geladen:</strong> @Model.LoadMethod in
-                    <strong>@Model.LoadTimeMs ms</strong>
-                    (@Model.TotalPixels Pixel)
-                    <span class="badge bg-success">
-                        ~@Math.Round(Model.TotalPixels / (double)Model.LoadTimeMs.Value * 1000, 0) Pixel/Sekunde
-                    </span>
+        <div class="card-body text-start">
+            <div class="row">
+                <div class="col-6">
+                    <small class="text-muted">Seite geladen um:</small><br>
+                    <strong id="pageLoadTime">@DateTime.Now.ToString("HH:mm:ss")</strong>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted">Ladezeit (Cache):</small><br>
+                    <strong class="text-success">@Model.LoadTimeMs ms</strong>
                 </div>
             </div>
+            <div class="row mt-2">
+                <div class="col-6">
+                    <small class="text-muted">API URL:</small><br>
+                    <strong style="font-size: 0.8em;">@Model.ApiUrl</strong>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted">Pixels geladen:</small><br>
+                    <strong class="text-primary">256</strong>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button class="btn btn-sm btn-primary" onclick="location.reload(true)">
+                    🔄 Seite neu laden (Hard Refresh)
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="clearCacheAndReload()">
+                    🗑️ Cache löschen & neu laden
+                </button>
+            </div>
+            <hr>
+            <div>
+                <small class="text-muted">📝 Letzte Aktionen:</small>
+                <div id="logBox" style="max-height: 150px; overflow-y: auto; font-size: 0.85em; background: #f8f9fa; padding: 10px; border-radius: 5px;">
+                    <div class="text-muted">Noch keine Aktionen...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label for="teamNumber" class="form-label"><strong>Team Nummer:</strong></label>
+        <input type="number" id="teamNumber" class="form-control" style="max-width: 150px; margin: 0 auto;" value="1" min="1" max="10" />
+    </div>
+
+    <div class="board-container">
+        @for (int y = 0; y < Model.Pixels.GetLength(1); y++)
+        {
+            @for (int x = 0; x < Model.Pixels.GetLength(0); x++)
+            {
+                var pixel = Model.Pixels[x, y];
+                <div id="pixel-@x-@y"
+                     class="pixel"
+                     data-x="@x"
+                     data-y="@y"
+                     style="background-color: rgb(@pixel.Red,@pixel.Green,@pixel.Blue);"
+                     onclick="setPixel(@x, @y)">
+                </div>
+            }
         }
     </div>
 
-    <!-- Steuerungsbereich - Pixel setzen (BONUS) -->
-    @if (Model.Pixels != null)
-    {
-        <div class="control-panel">
-            <h4><i class="bi bi-palette"></i> Pixel setzen (Bonus-Feature)</h4>
-
-            @if (Model.SetPixelResult != null)
-            {
-                <div class="alert @(Model.SetPixelResult.StartsWith("✓") ? "alert-success" : "alert-warning") alert-dismissible fade show">
-                    @Model.SetPixelResult
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            }
-
-            <form method="post" asp-page-handler="SetPixel">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-2">
-                        <label class="form-label">X Position (0-15)</label>
-                        <input type="number" class="form-control" asp-for="SelectedX" min="0" max="15" required />
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Y Position (0-15)</label>
-                        <input type="number" class="form-control" asp-for="SelectedY" min="0" max="15" required />
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Rot (0-255)</label>
-                        <input type="number" class="form-control" asp-for="Red" min="0" max="255" required />
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Grün (0-255)</label>
-                        <input type="number" class="form-control" asp-for="Green" min="0" max="255" required />
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Blau (0-255)</label>
-                        <input type="number" class="form-control" asp-for="Blue" min="0" max="255" required />
-                    </div>
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-success w-100">
-                            <i class="bi bi-brush"></i> Setzen
-                        </button>
-                    </div>
-                </div>
-                <div class="row mt-2">
-                    <div class="col-12">
-                        <div class="color-preview" style="background-color: rgb(@Model.Red, @Model.Green, @Model.Blue);">
-                            Vorschau: RGB(@Model.Red, @Model.Green, @Model.Blue)
-                        </div>
-                    </div>
-                </div>
-            </form>
-        </div>
-    }
-
-    <!-- Pixelboard Anzeige -->
-    @if (Model.Pixels != null)
-    {
-        <div class="board-section">
-            <div class="board-wrapper">
-                <div class="board-container" id="pixelboard">
-                    @for (int y = 0; y < Model.Pixels.GetLength(1); y++)
-                    {
-                        @for (int x = 0; x < Model.Pixels.GetLength(0); x++)
-                        {
-                            var pixel = Model.Pixels[x, y];
-                            var cssClass = "pixel";
-                            if (pixel.IsBlack()) cssClass += " pixel-empty";
-                            if (pixel.IsErrorColor()) cssClass += " pixel-error";
-
-                            <div class="@cssClass"
-                                 style="background-color: rgb(@pixel.Red, @pixel.Green, @pixel.Blue);"
-                                 data-x="@x"
-                                 data-y="@y"
-                                 data-r="@pixel.Red"
-                                 data-g="@pixel.Green"
-                                 data-b="@pixel.Blue"
-                                 onclick="selectPixel(this)"
-                                 title="(@x, @y)">
-                            </div>
-                        }
-                    }
-                </div>
-            </div>
-
-            <!-- Legende -->
-            <div class="legend">
-                <h5><i class="bi bi-info-circle"></i> Legende</h5>
-                <div class="legend-items">
-                    <div class="legend-item">
-                        <div class="legend-color" style="background-color: rgb(0,0,0);"></div>
-                        <span>Schwarz = Leer / Nicht initialisiert</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background-color: rgb(255,0,255);"></div>
-                        <span>Pink = Fehler beim Laden</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background-color: rgb(255,0,0);"></div>
-                        <span>Rot = Team Rot</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background-color: rgb(0,255,0);"></div>
-                        <span>Grün = Team Grün</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-color" style="background-color: rgb(0,0,255);"></div>
-                        <span>Blau = Team Blau</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Pixel Info Anzeige -->
-            <div id="pixel-info" class="pixel-info" style="display: none;">
-                <h6><i class="bi bi-cursor"></i> Ausgewähltes Pixel</h6>
-                <div id="pixel-details"></div>
-            </div>
-        </div>
-    }
-    else
-    {
-        <div class="welcome-section">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h3><i class="bi bi-arrow-up"></i> Wählen Sie eine Lademethode</h3>
-                    <p class="text-muted">Klicken Sie auf einen der Buttons oben, um das Pixelboard zu laden.</p>
-
-                    <div class="info-boxes mt-4">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="info-box">
-                                    <h5><i class="bi bi-lightning"></i> Parallel</h5>
-                                    <p>Alle Pixel werden gleichzeitig geladen. Sehr schnell!</p>
-                                    <p class="text-muted"><small>Verwendet Task.WhenAll() für simultane HTTP-Requests</small></p>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="info-box">
-                                    <h5><i class="bi bi-list-ol"></i> Sequenziell</h5>
-                                    <p>Pixel werden nacheinander geladen. Langsamer, aber einfacher zu debuggen.</p>
-                                    <p class="text-muted"><small>Verwendet await in einer Schleife</small></p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="alert alert-info mt-4">
-                        <strong><i class="bi bi-info-circle"></i> Wichtiger Hinweis:</strong>
-                        Falls das Board komplett schwarz ist, müssen Sie das Spiel initialisieren:
-                        <ol class="text-start mt-2">
-                            <li>Öffnen Sie <a href="@(Model.ApiBaseUrl)/Admin" target="_blank">@(Model.ApiBaseUrl)/Admin</a></li>
-                            <li>Klicken Sie auf <strong>"Start Game"</strong></li>
-                            <li>Laden Sie diese Seite neu</li>
-                        </ol>
-                    </div>
-                </div>
-            </div>
-        </div>
-    }
+    <div class="mt-3">
+        <small class="text-muted">💡 Tipp: Klicken Sie auf ein Pixel um es einzufärben</small>
+    </div>
 </div>
 
 @section Scripts {
     <script>
-        function selectPixel(element) {
-            const x = element.getAttribute('data-x');
-            const y = element.getAttribute('data-y');
-            const r = element.getAttribute('data-r');
-            const g = element.getAttribute('data-g');
-            const b = element.getAttribute('data-b');
+        let logCounter = 0;
 
-            // Formular ausfüllen
-            document.querySelector('input[name="SelectedX"]').value = x;
-            document.querySelector('input[name="SelectedY"]').value = y;
-            document.querySelector('input[name="Red"]').value = r;
-            document.querySelector('input[name="Green"]').value = g;
-            document.querySelector('input[name="Blue"]').value = b;
+        function addLog(message, type = 'info') {
+            logCounter++;
+            const logBox = document.getElementById('logBox');
+            const timestamp = new Date().toLocaleTimeString('de-CH');
 
-            // Update color preview
-            updateColorPreview(r, g, b);
+            // Entferne "Noch keine Aktionen" beim ersten Log
+            if (logCounter === 1) {
+                logBox.innerHTML = '';
+            }
 
-            // Pixel Info anzeigen
-            const infoDiv = document.getElementById('pixel-info');
-            const detailsDiv = document.getElementById('pixel-details');
+            const colors = {
+                'info': '#0dcaf0',
+                'success': '#198754',
+                'error': '#dc3545',
+                'warning': '#ffc107'
+            };
 
-            detailsDiv.innerHTML = `
-                <p><strong>Position:</strong> (${x}, ${y})</p>
-                <p><strong>RGB:</strong> (${r}, ${g}, ${b})</p>
-                <p><strong>Hex:</strong> #${componentToHex(r)}${componentToHex(g)}${componentToHex(b)}</p>
-                <p class="text-muted mt-2"><i class="bi bi-hand-index"></i> Die Werte wurden ins Formular übernommen. Ändern Sie sie und klicken Sie auf "Setzen".</p>
-            `;
+            const logEntry = document.createElement('div');
+            logEntry.style.marginBottom = '5px';
+            logEntry.style.borderLeft = `3px solid ${colors[type] || colors['info']}`;
+            logEntry.style.paddingLeft = '8px';
+            logEntry.innerHTML = `<small>[${timestamp}] ${message}</small>`;
 
-            infoDiv.style.display = 'block';
+            logBox.insertBefore(logEntry, logBox.firstChild);
 
-            // Highlight selected pixel
-            document.querySelectorAll('.pixel').forEach(p => p.classList.remove('pixel-selected'));
-            element.classList.add('pixel-selected');
-
-            // Scroll zum Formular
-            document.querySelector('.control-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-
-        function componentToHex(c) {
-            const hex = parseInt(c).toString(16);
-            return hex.length == 1 ? "0" + hex : hex;
-        }
-
-        function updateColorPreview(r, g, b) {
-            const preview = document.querySelector('.color-preview');
-            if (preview) {
-                preview.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
-                preview.textContent = `Vorschau: RGB(${r}, ${g}, ${b})`;
+            // Behalte nur die letzten 10 Einträge
+            while (logBox.children.length > 10) {
+                logBox.removeChild(logBox.lastChild);
             }
         }
 
-        // Update preview when inputs change
-        document.addEventListener('DOMContentLoaded', function() {
-            const inputs = ['Red', 'Green', 'Blue'];
-            inputs.forEach(name => {
-                const input = document.querySelector(`input[name="${name}"]`);
-                if (input) {
-                    input.addEventListener('input', function() {
-                        const r = document.querySelector('input[name="Red"]').value;
-                        const g = document.querySelector('input[name="Green"]').value;
-                        const b = document.querySelector('input[name="Blue"]').value;
-                        updateColorPreview(r, g, b);
-                    });
+        function clearCacheAndReload() {
+            addLog('Cache wird geleert...', 'warning');
+            setTimeout(() => {
+                location.reload(true);
+            }, 500);
+        }
+
+        async function setPixel(x, y) {
+            const team = document.getElementById('teamNumber').value;
+
+            addLog(`Versuche Pixel (${x},${y}) zu setzen für Team ${team}...`, 'info');
+
+            try {
+                // ✅ NEUE API Route
+                const response = await fetch('/api/pixel/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ x: x, y: y, team: parseInt(team) })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    addLog(`❌ HTTP ${response.status}: ${errorText}`, 'error');
+                    return;
                 }
-            });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    addLog(`✅ Pixel (${x},${y}) erfolgreich gesetzt!`, 'success');
+                    console.log('Pixel gesetzt:', result.message);
+
+                    const element = document.getElementById(`pixel-${x}-${y}`);
+                    if (element) {
+                        element.style.opacity = '0.5';
+                        element.style.transform = 'scale(0.9)';
+                        setTimeout(() => {
+                            element.style.opacity = '1';
+                            element.style.transform = 'scale(1)';
+                        }, 500);
+                    }
+                } else {
+                    addLog(`❌ Fehler: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                addLog(`❌ Request Fehler: ${error.message}`, 'error');
+                console.error('Request Fehler:', error);
+            }
+        }
+
+        // Initial Log
+        window.addEventListener('DOMContentLoaded', () => {
+            addLog('Seite geladen! Pixelboard bereit.', 'success');
         });
+
+        // Auto-refresh Info alle 15 Sekunden
+        setInterval(() => {
+            const now = new Date().toLocaleTimeString('de-CH');
+            document.getElementById('pageLoadTime').textContent = now + ' (auto)';
+            addLog('⏰ Auto-Update durchgeführt', 'info');
+        }, 15000);
     </script>
 }
