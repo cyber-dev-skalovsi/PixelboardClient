@@ -15,7 +15,12 @@
             Blue = 0;
         }
 
-        // Parse RGB string wie "rgb(255, 128, 0)" oder "#FF8000"
+        /// <summary>
+        /// Parse RGB string in verschiedenen Formaten:
+        /// - "rgb(255, 128, 0)"
+        /// - "#FF8000"
+        /// - JSON Format wird in Service behandelt
+        /// </summary>
         public static PixelColor Parse(string rgbString)
         {
             var color = new PixelColor();
@@ -30,10 +35,11 @@
                 {
                     var values = rgbString
                         .Replace("rgb(", "")
+                        .Replace("rgba(", "")
                         .Replace(")", "")
                         .Split(',');
 
-                    if (values.Length == 3)
+                    if (values.Length >= 3)
                     {
                         color.Red = int.Parse(values[0].Trim());
                         color.Green = int.Parse(values[1].Trim());
@@ -54,6 +60,26 @@
             }
 
             return color;
+        }
+
+        public string ToRgbString()
+        {
+            return $"rgb({Red}, {Green}, {Blue})";
+        }
+
+        public string ToHexString()
+        {
+            return $"#{Red:X2}{Green:X2}{Blue:X2}";
+        }
+
+        public bool IsBlack()
+        {
+            return Red == 0 && Green == 0 && Blue == 0;
+        }
+
+        public bool IsErrorColor()
+        {
+            return Red == 255 && Green == 0 && Blue == 255;
         }
     }
 }

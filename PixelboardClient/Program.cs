@@ -1,11 +1,21 @@
+using PixelboardClient.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
+// Add services
 builder.Services.AddRazorPages();
+builder.Services.AddHttpClient();
 
-builder.Services.AddHttpClient<PixelboardClient.Services.PixelboardService>();
+// Background Service und IBoardStateService registrieren
+builder.Services.AddSingleton<BoardStateService>();
+builder.Services.AddSingleton<IBoardStateService>(services =>
+    services.GetRequiredService<BoardStateService>());
+builder.Services.AddHostedService(services =>
+    services.GetRequiredService<BoardStateService>());
 
 var app = builder.Build();
 
+// Configure the HTTP request pipeline
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");

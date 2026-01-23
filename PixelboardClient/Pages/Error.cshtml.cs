@@ -12,10 +12,16 @@ namespace PixelboardClient.Pages
 
         public bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
 
+        private readonly ILogger<ErrorModel> _logger;
+
+        public ErrorModel(ILogger<ErrorModel> logger)
+        {
+            _logger = logger;
+        }
+
         public void OnGet()
         {
             RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier;
         }
     }
-
 }
