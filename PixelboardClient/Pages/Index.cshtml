@@ -33,16 +33,8 @@
         <div class="card-body">
             <div class="status-grid">
                 <div>
-                    <small class="text-muted">Seite geladen</small>
-                    <strong id="pageLoadTime">@DateTime.Now.ToString("HH:mm:ss")</strong>
-                </div>
-                <div>
                     <small class="text-muted">Ladezeit (aktiv)</small>
                     <strong class="text-success">@Model.LoadTimeMs ms</strong>
-                </div>
-                <div>
-                    <small class="text-muted">API URL</small>
-                    <strong class="api-url">@(Model.ApiUrl ?? "N/A")</strong>
                 </div>
             </div>
 
@@ -169,7 +161,6 @@
 
                 if (result.success) {
                     addLog(`Pixel (${x},${y}) erfolgreich gesetzt!`, 'success');
-                    console.log('Pixel gesetzt:', result.message);
 
                     const element = document.getElementById(`pixel-${x}-${y}`);
                     if (element) {
@@ -178,7 +169,7 @@
                         setTimeout(() => {
                             element.style.opacity = '1';
                             element.style.transform = 'scale(1)';
-                        }, 500);
+                        }, 300);
                     }
                 } else {
                     addLog(`Fehler: ${result.error}`, 'error');
@@ -265,10 +256,5 @@
 
             setTimeout(checkIfBoardIsBlack, 500);
         });
-
-        setInterval(() => {
-            document.getElementById('pageLoadTime').textContent =
-                new Date().toLocaleTimeString('de-CH', { hour12: false });
-        }, 1000);
     </script>
 }
