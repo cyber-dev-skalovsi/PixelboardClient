@@ -4,102 +4,111 @@
     ViewData["Title"] = "Pixelboard Client";
 }
 
-<div class="text-center">
-    <h1 class="display-4">
-        Pixelboard
-        <environment include="Development">
-            <span class="badge bg-warning text-dark">DEV</span>
-        </environment>
-    </h1>
+<div class="container">
+    <header class="header">
+        <h1>
+            PIXELBOARD CLIENT
+            <span class="badge dev-badge" environment="Development">DEV</span>
+        </h1>
+    </header>
 
     @if (Model.ErrorMessage != null)
     {
-        <div class="alert alert-danger">
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
             @Model.ErrorMessage
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     }
 
-    <!-- INFO BOX -->
-    <div class="card mb-3" style="max-width: 600px; margin: 0 auto;">
-        <div class="card-header bg-info text-white">
-            <strong>📊 Pixelboard Status</strong>
+    <div class="mode-buttons text-center mb-4">
+        <button class="btn mode-btn active" data-mode="cache">Cache</button>
+        <button class="btn mode-btn" data-mode="parallel">Parallel</button>
+        <button class="btn mode-btn" data-mode="sequential">Sequentiell</button>
+    </div>
+
+    <div class="status-card mb-5">
+        <div class="card-header">
+            <strong>Status Dashboard</strong>
         </div>
-        <div class="card-body text-start">
-            <div class="row">
-                <div class="col-6">
-                    <small class="text-muted">Seite geladen um:</small><br>
+        <div class="card-body">
+            <div class="status-grid">
+                <div>
+                    <small class="text-muted">Seite geladen</small>
                     <strong id="pageLoadTime">@DateTime.Now.ToString("HH:mm:ss")</strong>
                 </div>
-                <div class="col-6">
-                    <small class="text-muted">Ladezeit (Cache):</small><br>
+                <div>
+                    <small class="text-muted">Ladezeit (aktiv)</small>
                     <strong class="text-success">@Model.LoadTimeMs ms</strong>
                 </div>
-            </div>
-            <div class="row mt-2">
-                <div class="col-6">
-                    <small class="text-muted">API URL:</small><br>
-                    <strong style="font-size: 0.8em;">@Model.ApiUrl</strong>
-                </div>
-                <div class="col-6">
-                    <small class="text-muted">Pixels geladen:</small><br>
-                    <strong class="text-primary">256</strong>
+                <div>
+                    <small class="text-muted">API URL</small>
+                    <strong class="api-url">@(Model.ApiUrl ?? "N/A")</strong>
                 </div>
             </div>
-            <div class="mt-3">
-                <button class="btn btn-sm btn-primary" onclick="location.reload(true)">
-                    🔄 Seite neu laden (Hard Refresh)
+
+            <div class="action-buttons mt-4">
+                <button class="btn btn-primary btn-sm me-2" onclick="location.reload(true)">
+                    Seite neu laden
                 </button>
-                <button class="btn btn-sm btn-secondary" onclick="clearCacheAndReload()">
-                    🗑️ Cache löschen & neu laden
+                <button class="btn btn-outline-secondary btn-sm me-2" onclick="clearCacheAndReload()">
+                    Cache löschen & neu laden
+                </button>
+                <button class="btn btn-success btn-sm" onclick="startGame()">
+                    Start Game
                 </button>
             </div>
-            <hr>
-            <div>
-                <small class="text-muted">📝 Letzte Aktionen:</small>
-                <div id="logBox" style="max-height: 150px; overflow-y: auto; font-size: 0.85em; background: #f8f9fa; padding: 10px; border-radius: 5px;">
-                    <div class="text-muted">Noch keine Aktionen...</div>
+
+            <hr class="my-4" />
+
+            <div class="activity-log-section">
+                <strong class="d-block mb-2">Activity Log</strong>
+                <div id="logBox" class="log-content">
+                    <div class="log-placeholder text-muted fst-italic">Noch keine Aktionen...</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="mb-3">
-        <label for="teamNumber" class="form-label"><strong>Team Nummer:</strong></label>
-        <input type="number" id="teamNumber" class="form-control" style="max-width: 150px; margin: 0 auto;" value="1" min="1" max="10" />
+    <div class="team-section text-center mb-5">
+        <label for="teamNumber" class="form-label fw-bold">Team Nummer</label>
+        <input type="number" id="teamNumber" class="form-control team-input mx-auto"
+               value="@Model.TeamNumber" min="1" max="10" style="max-width: 140px;" />
     </div>
 
-    <div class="board-container">
-        @for (int y = 0; y < Model.Pixels.GetLength(1); y++)
-        {
-            @for (int x = 0; x < Model.Pixels.GetLength(0); x++)
+    <div class="board-wrapper text-center">
+        <div class="board-container mx-auto">
+            @if (Model.Pixels != null)
             {
-                var pixel = Model.Pixels[x, y];
-                <div id="pixel-@x-@y"
-                     class="pixel"
-                     data-x="@x"
-                     data-y="@y"
-                     style="background-color: rgb(@pixel.Red,@pixel.Green,@pixel.Blue);"
-                     onclick="setPixel(@x, @y)">
-                </div>
+                for (int y = 0; y < Model.Pixels.GetLength(1); y++)
+                {
+                    for (int x = 0; x < Model.Pixels.GetLength(0); x++)
+                    {
+                        var pixel = Model.Pixels[x, y];
+                        <div class="pixel"
+                             id="pixel-@x-@y"
+                             data-x="@x" data-y="@y"
+                             style="background-color: rgb(@(pixel?.Red ?? 0), @(pixel?.Green ?? 0), @(pixel?.Blue ?? 0));"
+                             onclick="setPixel(@x, @y)">
+                        </div>
+                    }
+                }
             }
-        }
-    </div>
-
-    <div class="mt-3">
-        <small class="text-muted">💡 Tipp: Klicken Sie auf ein Pixel um es einzufärben</small>
+        </div>
+        <div class="board-label mt-3">PIXELBOARD <small>(16 × 16)</small></div>
     </div>
 </div>
 
 @section Scripts {
     <script>
         let logCounter = 0;
+        let initialLoadDone = false;
+        let currentMode = 'cache';
 
         function addLog(message, type = 'info') {
             logCounter++;
             const logBox = document.getElementById('logBox');
             const timestamp = new Date().toLocaleTimeString('de-CH');
 
-            // Entferne "Noch keine Aktionen" beim ersten Log
             if (logCounter === 1) {
                 logBox.innerHTML = '';
             }
@@ -119,17 +128,21 @@
 
             logBox.insertBefore(logEntry, logBox.firstChild);
 
-            // Behalte nur die letzten 10 Einträge
             while (logBox.children.length > 10) {
                 logBox.removeChild(logBox.lastChild);
             }
         }
 
         function clearCacheAndReload() {
-            addLog('Cache wird geleert...', 'warning');
             setTimeout(() => {
                 location.reload(true);
             }, 500);
+            addLog("Cache gelöscht & Seite wird neu geladen", "info");
+            location.reload(true);
+        }
+
+        function startGame() {
+            addLog("Game-Modus aktiviert (Platzhalter)", "success");
         }
 
         async function setPixel(x, y) {
@@ -138,7 +151,6 @@
             addLog(`Versuche Pixel (${x},${y}) zu setzen für Team ${team}...`, 'info');
 
             try {
-                // ✅ NEUE API Route
                 const response = await fetch('/api/pixel/set', {
                     method: 'POST',
                     headers: {
@@ -149,14 +161,14 @@
 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    addLog(`❌ HTTP ${response.status}: ${errorText}`, 'error');
+                    addLog(`HTTP ${response.status}: ${errorText}`, 'error');
                     return;
                 }
 
                 const result = await response.json();
 
                 if (result.success) {
-                    addLog(`✅ Pixel (${x},${y}) erfolgreich gesetzt!`, 'success');
+                    addLog(`Pixel (${x},${y}) erfolgreich gesetzt!`, 'success');
                     console.log('Pixel gesetzt:', result.message);
 
                     const element = document.getElementById(`pixel-${x}-${y}`);
@@ -169,24 +181,94 @@
                         }, 500);
                     }
                 } else {
-                    addLog(`❌ Fehler: ${result.error}`, 'error');
+                    addLog(`Fehler: ${result.error}`, 'error');
                 }
             } catch (error) {
-                addLog(`❌ Request Fehler: ${error.message}`, 'error');
+                addLog(`Request Fehler: ${error.message}`, 'error');
                 console.error('Request Fehler:', error);
             }
         }
 
-        // Initial Log
+        async function loadPixelsByMode(mode) {
+            currentMode = mode;
+            
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            addLog(`Lade Pixels im Modus: ${mode}...`, 'info');
+
+            try {
+                const response = await fetch(`/index?handler=LoadPixels&mode=${mode}`);
+                const result = await response.json();
+
+                if (!result.success) {
+                    addLog(`Fehler beim Laden: ${result.error}`, 'error');
+                    return;
+                }
+
+                addLog(`Pixels geladen in ${result.loadTimeMs}ms (${mode})`, 'success');
+                updatePixels(result.pixels);
+
+                document.querySelector('.text-success').textContent = `${result.loadTimeMs} ms`;
+            } catch (error) {
+                addLog(`Request Fehler: ${error.message}`, 'error');
+                console.error('Load Error:', error);
+            }
+        }
+
+        function updatePixels(pixelList) {
+            pixelList.forEach(p => {
+                const element = document.getElementById(`pixel-${p.x}-${p.y}`);
+                if (element) {
+                    const rgbColor = `rgb(${p.red}, ${p.green}, ${p.blue})`;
+                    element.style.backgroundColor = rgbColor;
+                }
+            });
+        }
+
+        function checkIfBoardIsBlack() {
+            let allBlack = true;
+            let coloredPixels = 0;
+
+            for (let x = 0; x < 16; x++) {
+                for (let y = 0; y < 16; y++) {
+                    const element = document.getElementById(`pixel-${x}-${y}`);
+                    if (element) {
+                        const bgColor = element.style.backgroundColor;
+                        if (bgColor !== 'rgb(0, 0, 0)' && bgColor !== 'rgb(0,0,0)' && bgColor !== '') {
+                            allBlack = false;
+                            coloredPixels++;
+                        }
+                    }
+                }
+            }
+
+            if (allBlack && !initialLoadDone) {
+                addLog('Board ist noch schwarz. Drücken Sie F5 zum Neuladen.', 'warning');
+            } else {
+                initialLoadDone = true;
+                addLog(`Board geladen mit ${coloredPixels} farbigen Pixels!`, 'success');
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             addLog('Seite geladen! Pixelboard bereit.', 'success');
+
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const mode = this.getAttribute('data-mode');
+                    loadPixelsByMode(mode);
+                });
+            });
+
+            setTimeout(checkIfBoardIsBlack, 500);
         });
 
-        // Auto-refresh Info alle 15 Sekunden
         setInterval(() => {
-            const now = new Date().toLocaleTimeString('de-CH');
-            document.getElementById('pageLoadTime').textContent = now + ' (auto)';
-            addLog('⏰ Auto-Update durchgeführt', 'info');
-        }, 15000);
+            document.getElementById('pageLoadTime').textContent =
+                new Date().toLocaleTimeString('de-CH', { hour12: false });
+        }, 1000);
     </script>
 }

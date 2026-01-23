@@ -8,20 +8,23 @@ namespace PixelboardClient.Services
         private readonly ILogger<BoardStateService> _logger;
         private readonly IConfiguration _configuration;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IGraphQLPixelService _graphQLService;
         private PixelColor[,] _pixels = new PixelColor[16, 16];
         private readonly object _lock = new object();
         private string? _apiUrl;
+        private bool _useGraphQL = true;
 
         public BoardStateService(
             ILogger<BoardStateService> logger,
             IConfiguration configuration,
-            IHttpClientFactory httpClientFactory)
+            IHttpClientFactory httpClientFactory,
+            IGraphQLPixelService graphQLService)
         {
             _logger = logger;
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
+            _graphQLService = graphQLService;
 
-            // Initialisiere mit schwarzen Pixeln
             for (int x = 0; x < 16; x++)
             {
                 for (int y = 0; y < 16; y++)
@@ -50,15 +53,76 @@ namespace PixelboardClient.Services
             }
         }
 
+        public async Task<(PixelColor[,] pixels, long elapsedMs)> LoadPixelsParallelAsync()
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(30);
+
+            var tasks = new List<Task<(int x, int y, PixelColor? color)>>();
+
+            for (int x = 0; x < 16; x++)
+            {
+                for (int y = 0; y < 16; y++)
+                {
+                    int capturedX = x;
+                    int capturedY = y;
+                    tasks.Add(FetchPixelAsync(client, capturedX, capturedY));
+                }
+            }
+
+            var results = await Task.WhenAll(tasks);
+            var pixels = new PixelColor[16, 16];
+
+            foreach (var (x, y, color) in results)
+            {
+                pixels[x, y] = color ?? new PixelColor(0, 0, 0);
+            }
+
+            stopwatch.Stop();
+            return (pixels, stopwatch.ElapsedMilliseconds);
+        }
+
+        public async Task<(PixelColor[,] pixels, long elapsedMs)> LoadPixelsSequentialAsync()
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(30);
+            var pixels = new PixelColor[16, 16];
+
+            for (int x = 0; x < 16; x++)
+            {
+                for (int y = 0; y < 16; y++)
+                {
+                    var (_, _, color) = await FetchPixelAsync(client, x, y);
+                    pixels[x, y] = color ?? new PixelColor(0, 0, 0);
+                }
+            }
+
+            stopwatch.Stop();
+            return (pixels, stopwatch.ElapsedMilliseconds);
+        }
+
+        public async Task<(PixelColor[,] pixels, long elapsedMs)> LoadPixelsCachedAsync()
+        {
+            var stopwatch = Stopwatch.StartNew();
+
+            lock (_lock)
+            {
+                var cachedPixels = (PixelColor[,])_pixels.Clone();
+                stopwatch.Stop();
+                return (cachedPixels, stopwatch.ElapsedMilliseconds);
+            }
+        }
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            // WICHTIG: Delay am Anfang damit Startup nicht blockiert wird
             await Task.Delay(1000, stoppingToken);
 
             _apiUrl = _configuration["ApiUrl"];
-            _logger.LogInformation("BoardStateService gestartet mit API URL: {url}", _apiUrl);
+            _logger.LogInformation("BoardStateService gestartet mit API URL: {url} (GraphQL: {gql})",
+                _apiUrl, _useGraphQL);
 
-            // Initiales Laden
             await LoadPixelsAsync();
 
             while (!stoppingToken.IsCancellationRequested)
@@ -78,13 +142,49 @@ namespace PixelboardClient.Services
 
         private async Task LoadPixelsAsync()
         {
+            var stopwatch = Stopwatch.StartNew();
+
+            try
+            {
+                if (_useGraphQL)
+                {
+                    var newPixels = await _graphQLService.LoadAllPixelsAsync();
+
+                    lock (_lock)
+                    {
+                        _pixels = newPixels;
+                    }
+                }
+                else
+                {
+                    await LoadPixelsRestAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Fehler beim Laden der Pixels");
+
+                if (_useGraphQL)
+                {
+                    _logger.LogWarning("GraphQL fehlgeschlagen, versuche REST API...");
+                    _useGraphQL = false;
+                    await LoadPixelsRestAsync();
+                }
+            }
+
+            stopwatch.Stop();
+            _logger.LogInformation("Alle 256 Pixels geladen in {ms}ms (Methode: {method})",
+                stopwatch.ElapsedMilliseconds,
+                _useGraphQL ? "GraphQL" : "REST");
+        }
+
+        private async Task LoadPixelsRestAsync()
+        {
             var client = _httpClientFactory.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(30);
-            var stopwatch = Stopwatch.StartNew();
 
             var tasks = new List<Task<(int x, int y, PixelColor? color)>>();
 
-            // Parallele Requests für alle Pixel
             for (int x = 0; x < 16; x++)
             {
                 for (int y = 0; y < 16; y++)
@@ -107,9 +207,6 @@ namespace PixelboardClient.Services
                     }
                 }
             }
-
-            stopwatch.Stop();
-            _logger.LogInformation("Alle 256 Pixels geladen in {ms}ms", stopwatch.ElapsedMilliseconds);
         }
 
         private async Task<(int x, int y, PixelColor? color)> FetchPixelAsync(
@@ -123,8 +220,6 @@ namespace PixelboardClient.Services
                 if (response.IsSuccessStatusCode)
                 {
                     var content = await response.Content.ReadAsStringAsync();
-
-                    // ✅ FIXED: Use FromRgbString which now handles JSON
                     var color = PixelColor.FromRgbString(content);
 
                     if (color != null)
@@ -133,17 +228,11 @@ namespace PixelboardClient.Services
                     }
                     else
                     {
-                        _logger.LogWarning("Konnte Farbe nicht parsen für Pixel ({x},{y}): {content}",
-                            x, y, content);
                         return (x, y, new PixelColor(0, 0, 0));
                     }
                 }
                 else
                 {
-                    var errorBody = await response.Content.ReadAsStringAsync();
-                    _logger.LogWarning("HTTP {status} beim Laden von Pixel ({x},{y}): {body}",
-                        response.StatusCode, x, y, errorBody);
-                    // Bei Fehler: Pink als Markierung
                     return (x, y, new PixelColor(255, 0, 255));
                 }
             }
@@ -153,7 +242,5 @@ namespace PixelboardClient.Services
                 return (x, y, new PixelColor(255, 0, 255));
             }
         }
-
-
     }
 }

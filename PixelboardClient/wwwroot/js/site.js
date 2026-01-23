@@ -1,2 +1,1 @@
-﻿// Platzhalter für eigenes JavaScript
-console.log('Pixelboard Client geladen');
+﻿console.log('Pixelboard Client geladen');

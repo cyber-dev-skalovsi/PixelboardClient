@@ -3,8 +3,6 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using PixelboardClient.Models;
 using PixelboardClient.Services;
 using System.Diagnostics;
-using System.Text;
-using System.Text.Json;
 
 namespace PixelboardClient.Pages
 {
@@ -13,13 +11,12 @@ namespace PixelboardClient.Pages
         private readonly ILogger<IndexModel> _logger;
         private readonly IBoardStateService _boardStateService;
         private readonly IConfiguration _configuration;
-        private readonly IHttpClientFactory _httpClientFactory;
 
         public PixelColor[,] Pixels { get; set; } = new PixelColor[16, 16];
         public string? ErrorMessage { get; set; }
-        public long LoadTimeMs { get; set; }
-        public bool UseCache { get; set; } = true;
-        public string? ApiUrl { get; set; }  // ✅ NEU
+        public long LoadTimeMs { get; set; } = 0;
+        public string ApiUrl { get; set; } = "Unknown";
+        public string LoadMode { get; set; } = "cache";
 
         [BindProperty]
         public int TeamNumber { get; set; } = 1;
@@ -27,75 +24,87 @@ namespace PixelboardClient.Pages
         public IndexModel(
             ILogger<IndexModel> logger,
             IBoardStateService boardStateService,
-            IConfiguration configuration,
-            IHttpClientFactory httpClientFactory)
+            IConfiguration configuration)
         {
             _logger = logger;
             _boardStateService = boardStateService;
             _configuration = configuration;
-            _httpClientFactory = httpClientFactory;
         }
 
         public void OnGet()
         {
-            var stopwatch = Stopwatch.StartNew();
-
-            // Lade Pixels aus dem Cache
-            Pixels = _boardStateService.GetAllPixels();
-
-            // ✅ NEU: API URL anzeigen
-            ApiUrl = _configuration["ApiUrl"];
-
-            stopwatch.Stop();
-            LoadTimeMs = stopwatch.ElapsedMilliseconds;
-
-            _logger.LogInformation("Index Seite geladen in {ms}ms (mit Cache)", LoadTimeMs);
-        }
-
-        [IgnoreAntiforgeryToken]
-        public async Task<IActionResult> OnPostSetPixelAsync(int x, int y, int team)
-        {
             try
             {
-                var apiUrl = _configuration["ApiUrl"];
-                var client = _httpClientFactory.CreateClient();
+                var stopwatch = Stopwatch.StartNew();
 
-                var payload = new
-                {
-                    x = x,
-                    y = y,
-                    team = team
-                };
+                ApiUrl = _configuration["ApiUrl"] ?? "http://localhost:5085";
+                Pixels = _boardStateService.GetAllPixels();
 
-                var jsonContent = JsonSerializer.Serialize(payload);
-                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+                stopwatch.Stop();
+                LoadTimeMs = stopwatch.ElapsedMilliseconds;
 
-                var response = await client.PostAsync($"{apiUrl}/api/color", content);
-                var responseBody = await response.Content.ReadAsStringAsync();
-
-                if (response.IsSuccessStatusCode)
-                {
-                    _logger.LogInformation("Pixel ({x},{y}) erfolgreich gesetzt für Team {team}. Response: {response}",
-                        x, y, team, responseBody);
-
-                    return new JsonResult(new { success = true, message = responseBody });
-                }
-                else
-                {
-                    _logger.LogWarning("Fehler beim Setzen von Pixel ({x},{y}): Status {status}, Body: {body}",
-                        x, y, response.StatusCode, responseBody);
-
-                    return new JsonResult(new
-                    {
-                        success = false,
-                        error = $"Status: {response.StatusCode}, Message: {responseBody}"
-                    });
-                }
+                _logger.LogInformation("Index Seite geladen in {ms}ms (mit Cache)", LoadTimeMs);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception beim Setzen von Pixel ({x},{y})", x, y);
-                return new JsonResult(new { success = false, error = ex.Message });
+                _logger.LogError(ex, "Fehler beim Laden der Index Seite");
+                ErrorMessage = $"Fehler beim Laden: {ex.Message}";
+
+                for (int x = 0; x < 16; x++)
+                {
+                    for (int y = 0; y < 16; y++)
+                    {
+                        Pixels[x, y] = new PixelColor(0, 0, 0);
+                    }
+                }
+            }
+        }
+
+        public async Task<IActionResult> OnGetLoadPixelsAsync(string mode = "cache")
+        {
+            try
+            {
+                var (pixels, elapsedMs) = mode.ToLower() switch
+                {
+                    "parallel" => await _boardStateService.LoadPixelsParallelAsync(),
+                    "sequential" => await _boardStateService.LoadPixelsSequentialAsync(),
+                    "cache" => await _boardStateService.LoadPixelsCachedAsync(),
+                    _ => await _boardStateService.LoadPixelsCachedAsync()
+                };
+
+                var pixelList = new List<dynamic>();
+                for (int x = 0; x < 16; x++)
+                {
+                    for (int y = 0; y < 16; y++)
+                    {
+                        pixelList.Add(new
+                        {
+                            x,
+                            y,
+                            red = pixels[x, y].Red,
+                            green = pixels[x, y].Green,
+                            blue = pixels[x, y].Blue
+                        });
+                    }
+                }
+
+                return new JsonResult(new
+                {
+                    success = true,
+                    loadTimeMs = elapsedMs,
+                    mode = mode.ToLower(),
+                    pixels = pixelList
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Fehler beim Laden der Pixels im Modus: {mode}", mode);
+                return new JsonResult(new
+                {
+                    success = false,
+                    error = ex.Message,
+                    mode = mode.ToLower()
+                });
             }
         }
     }

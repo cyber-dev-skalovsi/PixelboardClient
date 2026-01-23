@@ -17,7 +17,6 @@ namespace PixelboardClient.Models
             Blue = blue;
         }
 
-        // Parse aus JSON String Format {"Red":100,"Green":100,"Blue":100}
         public static PixelColor? FromJsonString(string? jsonString)
         {
             if (string.IsNullOrEmpty(jsonString))
@@ -25,7 +24,6 @@ namespace PixelboardClient.Models
 
             try
             {
-                // Deserialisiere JSON direkt
                 var color = JsonSerializer.Deserialize<PixelColor>(jsonString);
                 return color;
             }
@@ -35,7 +33,6 @@ namespace PixelboardClient.Models
             }
         }
 
-        // Fallback: Parse aus rgb() Format falls nötig
         public static PixelColor? FromRgbString(string? rgbString)
         {
             if (string.IsNullOrEmpty(rgbString))
@@ -43,13 +40,11 @@ namespace PixelboardClient.Models
 
             try
             {
-                // Versuche zuerst JSON
                 if (rgbString.StartsWith("{"))
                 {
                     return FromJsonString(rgbString);
                 }
 
-                // Entfernt "rgb(" und ")"
                 var values = rgbString.Replace("rgb(", "").Replace(")", "").Split(',');
 
                 if (values.Length == 3)
