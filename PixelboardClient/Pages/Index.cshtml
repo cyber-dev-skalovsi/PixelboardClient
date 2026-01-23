@@ -32,6 +32,14 @@
     </div>
 
     <div class="board-wrapper text-center">
+        <div class="pixel-info-box">
+            <div class="pixel-info-content">
+                <small class="text-muted">Pixel Info:</small>
+                <strong id="pixelCoords">-</strong>
+                <strong id="pixelRGB">-</strong>
+            </div>
+        </div>
+
         <div class="board-container mx-auto">
             @if (Model.Pixels != null)
             {
@@ -42,7 +50,14 @@
                         var pixel = Model.Pixels[x, y];
                         <div class="pixel"
                              id="pixel-@x-@y"
-                             style="background-color: rgb(@(pixel?.Red ?? 0), @(pixel?.Green ?? 0), @(pixel?.Blue ?? 0));">
+                             data-x="@x" 
+                             data-y="@y"
+                             data-red="@pixel?.Red"
+                             data-green="@pixel?.Green"
+                             data-blue="@pixel?.Blue"
+                             style="background-color: rgb(@(pixel?.Red ?? 0), @(pixel?.Green ?? 0), @(pixel?.Blue ?? 0));"
+                             onmouseover="showPixelInfo(@x, @y)"
+                             onmouseout="hidePixelInfo()">
                         </div>
                     }
                 }
@@ -51,3 +66,22 @@
         <div class="board-label mt-3">PIXELBOARD <small>(16 × 16)</small></div>
     </div>
 </div>
+
+<script>
+    function showPixelInfo(x, y) {
+        const pixel = document.getElementById(`pixel-${x}-${y}`);
+        if (pixel) {
+            const red = pixel.getAttribute('data-red');
+            const green = pixel.getAttribute('data-green');
+            const blue = pixel.getAttribute('data-blue');
+            
+            document.getElementById('pixelCoords').textContent = `(${x}, ${y})`;
+            document.getElementById('pixelRGB').textContent = `RGB(${red}, ${green}, ${blue})`;
+        }
+    }
+    
+    function hidePixelInfo() {
+        document.getElementById('pixelCoords').textContent = '-';
+        document.getElementById('pixelRGB').textContent = '-';
+    }
+</script>
