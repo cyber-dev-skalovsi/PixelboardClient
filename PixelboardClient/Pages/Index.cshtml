@@ -20,6 +20,32 @@
         </div>
     }
 
+    <div class="card mb-3" style="max-width: 600px; margin: 0 auto;">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>🔐 Auth Status</strong>
+            <span class="badge @(Model.IsAuthenticated ? "bg-success" : "bg-danger")" id="authStatus">
+                @(Model.IsAuthenticated ? "✅ Eingeloggt" : "❌ Gast")
+            </span>
+        </div>
+        <div class="card-body">
+            @if (Model.IsAuthenticated)
+            {
+                <div class="d-flex gap-2 flex-wrap">
+                    <span class="small text-muted">User: @Model.UserName</span>
+                    <span class="small text-muted">ID: @Model.UserId</span>
+                    <form asp-page-handler="Logout" method="post" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Logout</button>
+                    </form>
+                </div>
+            }
+            else
+            {
+                <a asp-page-handler="Login" class="btn btn-sm btn-primary">Login mit Keycloak</a>
+            }
+        </div>
+    </div>
+
+
     <div class="mode-buttons text-center mb-4">
         <button class="btn mode-btn active" data-mode="cache">Cache</button>
         <button class="btn mode-btn" data-mode="parallel">Parallel</button>
@@ -152,8 +178,19 @@
                 });
 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    addLog(`HTTP ${response.status}: ${errorText}`, 'error');
+                    let message = `HTTP ${response.status}`;
+                    try {
+                        const body = await response.json();
+                        if (body.error_description) {
+                            message += ` – ${body.error_description}`;
+                        } else if (body.message) {
+                            message += ` – ${body.message}`;
+                        }
+                    } catch {
+                        const text = await response.text();
+                        if (text) message += ` – ${text}`;
+                    }
+                    addLog(`❌ ${message}`, 'error');
                     return;
                 }
 
@@ -261,6 +298,32 @@
             });
 
             setTimeout(checkIfBoardIsBlack, 500);
+        });
+
+                setInterval(() => {
+            fetch('/api/auth/status')
+                .then(res => res.json())
+                .then(data => {
+                    const statusBadge = document.getElementById('authStatus');
+                    if (statusBadge) {
+                        if (data.authenticated) {
+                            statusBadge.textContent = `✅ ${data.username}`;
+                            statusBadge.className = 'badge bg-success';
+                        } else {
+                            statusBadge.textContent = '❌ Gast';
+                            statusBadge.className = 'badge bg-danger';
+                        }
+                    }
+                });
+        }, 2000);
+
+        window.addEventListener('click', function(e) {
+            if (e.target.classList.contains('pixel') &&
+                document.getElementById('authStatus').textContent.includes('Gast')) {
+                if (confirm('Login erforderlich. Zum Keycloak?')) {
+                    window.location.href = '/Index?handler=Login';
+                }
+            }
         });
     </script>
 }

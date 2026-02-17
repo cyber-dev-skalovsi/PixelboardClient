@@ -1,15 +1,22 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using PixelboardClient.Models;
 using PixelboardClient.Services;
 using System.Diagnostics;
+using System.Security.Claims;
+using System.Text.Json;
 
 namespace PixelboardClient.Pages
 {
+    [AllowAnonymous]
     public class IndexModel : PageModel
     {
         private readonly ILogger<IndexModel> _logger;
-        private readonly IBoardStateService _boardStateService;
+        private readonly IBoardStateService _boardStateService;  // ← Das fehlte!
         private readonly IConfiguration _configuration;
 
         public PixelColor[,] Pixels { get; set; } = new PixelColor[16, 16];
@@ -17,13 +24,16 @@ namespace PixelboardClient.Pages
         public long LoadTimeMs { get; set; } = 0;
         public string ApiUrl { get; set; } = "Unknown";
         public string LoadMode { get; set; } = "cache";
+        public bool IsAuthenticated { get; set; }
+        public string? UserName { get; set; }
+        public string? UserId { get; set; }
 
         [BindProperty]
         public int TeamNumber { get; set; } = 1;
 
         public IndexModel(
             ILogger<IndexModel> logger,
-            IBoardStateService boardStateService,
+            IBoardStateService boardStateService,     // ← JETZT registriert!
             IConfiguration configuration)
         {
             _logger = logger;
@@ -37,13 +47,19 @@ namespace PixelboardClient.Pages
             {
                 var stopwatch = Stopwatch.StartNew();
 
+                // ✅ AUTH STATUS
+                IsAuthenticated = User.Identity?.IsAuthenticated ?? false;
+                UserName = User.Identity?.Name ?? "Gast";
+                UserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "keine ID";
+
                 ApiUrl = _configuration["ApiUrl"] ?? "http://localhost:5085";
                 Pixels = _boardStateService.GetAllPixels();
 
                 stopwatch.Stop();
                 LoadTimeMs = stopwatch.ElapsedMilliseconds;
 
-                _logger.LogInformation("Index Seite geladen in {ms}ms (mit Cache)", LoadTimeMs);
+                _logger.LogInformation("Index Seite geladen in {ms}ms (Auth: {auth}, User: {user})",
+                    LoadTimeMs, IsAuthenticated, UserName);
             }
             catch (Exception ex)
             {
@@ -58,6 +74,20 @@ namespace PixelboardClient.Pages
                     }
                 }
             }
+        }
+        public IActionResult OnGetLogin()
+        {
+            return Challenge(
+                new AuthenticationProperties { RedirectUri = "/" },
+                OpenIdConnectDefaults.AuthenticationScheme);
+        }
+
+        public IActionResult OnPostLogout()
+        {
+            return SignOut(
+                new AuthenticationProperties { RedirectUri = "/" },
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                OpenIdConnectDefaults.AuthenticationScheme);
         }
 
         public async Task<IActionResult> OnGetLoadPixelsAsync(string mode = "cache")
