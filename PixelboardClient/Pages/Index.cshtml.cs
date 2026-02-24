@@ -18,6 +18,7 @@ namespace PixelboardClient.Pages
         private readonly ILogger<IndexModel> _logger;
         private readonly IBoardStateService _boardStateService;
         private readonly IConfiguration _configuration;
+        private readonly IHttpClientFactory _httpFactory;
 
         public PixelColor[,] Pixels { get; set; } = new PixelColor[16, 16];
         public string? ErrorMessage { get; set; }
@@ -34,11 +35,13 @@ namespace PixelboardClient.Pages
         public IndexModel(
             ILogger<IndexModel> logger,
             IBoardStateService boardStateService,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IHttpClientFactory httpFactory)
         {
             _logger = logger;
             _boardStateService = boardStateService;
             _configuration = configuration;
+            _httpFactory = httpFactory;
         }
         public IActionResult OnGetIdToken()
         {
@@ -51,7 +54,6 @@ namespace PixelboardClient.Pages
             {
                 var stopwatch = Stopwatch.StartNew();
 
-                // ✅ AUTH STATUS
                 IsAuthenticated = User.Identity?.IsAuthenticated ?? false;
                 UserName = User.Identity?.Name ?? "Gast";
                 UserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "keine ID";
@@ -93,6 +95,30 @@ namespace PixelboardClient.Pages
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 OpenIdConnectDefaults.AuthenticationScheme);
         }
+        public async Task<IActionResult> OnGetTeamBudget(int teamId = 1)
+        {
+            try
+            {
+                var apiUrl = _configuration["ApiUrl"];
+                using var client = _httpFactory.CreateClient();
+                var token = await HttpContext.GetTokenAsync("access_token");
+
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                var resp = await client.GetAsync($"{apiUrl}/api/game/team/{teamId}");
+
+                if (resp.IsSuccessStatusCode)
+                {
+                    var content = await resp.Content.ReadAsStringAsync();
+                    return new JsonResult(JsonSerializer.Deserialize<object>(content));
+                }
+                return new JsonResult(new { budgetRemaining = 100 });
+            }
+            catch
+            {
+                return new JsonResult(new { budgetRemaining = 100 });
+            }
+        }
+
 
         public async Task<IActionResult> OnGetLoadPixelsAsync(string mode = "cache")
         {

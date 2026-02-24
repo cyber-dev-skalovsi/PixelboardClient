@@ -38,7 +38,7 @@ namespace PixelboardClient.Services
 
         public record PixelUpdate(int X, int Y, int Red, int Green, int Blue);
 
-        // In LoadPixelsAsync(), nach Pixel-Update:
+   
         private async Task NotifyPixelUpdate(int x, int y, PixelColor color)
         {
             await _pixelUpdateChannel.Writer.WriteAsync(new PixelUpdate(x, y, color.Red, color.Green, color.Blue));

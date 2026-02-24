@@ -5,7 +5,6 @@
 }
 
 <div class="container">
-    <!-- [HEADER UND AUTH KARTEN BLEIBEN GLEICH] -->
     <header class="header">
         <h1>
             PIXELBOARD CLIENT
@@ -49,7 +48,21 @@
         </div>
     </div>
 
-    <!-- REST DES HTML BLEIBT GLEICH -->
+    <div class="team-stats mb-4">
+        <div class="card mx-auto" style="max-width: 400px;">
+            <div class="card-header">
+                <strong>🎨 Team #@Model.TeamNumber Budget</strong>
+            </div>
+            <div class="card-body text-center">
+                <div class="budget-bar mb-2">
+                    <div id="budgetBar" class="budget-fill" style="width: 100%; background: linear-gradient(90deg, #4ade80, #10b981);"></div>
+                </div>
+                <div id="budgetText" class="h5 fw-bold">100 / 100</div>
+                <small class="text-muted">Verbleibende Pixel zum Setzen</small>
+            </div>
+        </div>
+    </div>
+
     <div class="mode-buttons text-center mb-4">
         <button class="btn mode-btn active" data-mode="cache">Cache</button>
         <button class="btn mode-btn" data-mode="parallel">Parallel</button>
@@ -58,7 +71,7 @@
 
     <div class="status-card mb-5">
         <div class="card-header">
-            <strong>Status Dashboard</strong>
+            <strong>📊 Status Dashboard</strong>
         </div>
         <div class="card-body">
             <div class="status-grid">
@@ -68,27 +81,41 @@
                 </div>
                 <div>
                     <small class="text-muted">Live Updates</small>
-                    <span class="badge bg-info" id="liveStatus">🟢 Verbunden</span>
+                    <span class="badge bg-success" id="liveStatus">🟢 Verbunden</span>
                 </div>
             </div>
 
             <div class="action-buttons mt-4">
-                <button class="btn btn-primary btn-sm me-2" onclick="location.reload(true)">
-                    Seite neu laden
-                </button>
-                <button class="btn btn-outline-secondary btn-sm me-2" onclick="clearCacheAndReload()">
-                    Cache löschen & neu laden
-                </button>
-                <button class="btn btn-success btn-sm" onclick="startGame()">
-                    Start Game
-                </button>
+                <button class="btn btn-primary btn-sm me-2" onclick="location.reload(true)">Seite neu laden</button>
+                <button class="btn btn-success btn-sm" onclick="loadTeamBudget(); loadLeaderboard();">🔄 Teams Refresh</button>
             </div>
 
             <hr class="my-4" />
             <div class="activity-log-section">
-                <strong class="d-block mb-2">Activity Log</strong>
-                <div id="logBox" class="log-content">
+                <strong class="d-block mb-2">📋 Activity Log</strong>
+                <div id="logBox" class="log-content" style="height: 200px; overflow-y: auto;">
                     <div class="log-placeholder text-muted fst-italic">Noch keine Aktionen...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="leaderboard mb-5">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <strong>🏆 RANG LISTE - Live Punkte</strong>
+                <button class="btn btn-sm btn-outline-primary" onclick="loadLeaderboard()">🔄</button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-dark">
+                            <tr><th>#</th><th>Team</th><th>Punkte</th></tr>
+                        </thead>
+                        <tbody id="leaderboardBody">
+                            <tr><td colspan="3" class="text-center text-muted">Laden... (MS5.2.2)</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -96,8 +123,8 @@
 
     <div class="team-section text-center mb-5">
         <label for="teamNumber" class="form-label fw-bold">Team Nummer</label>
-        <input type="number" id="teamNumber" class="form-control team-input mx-auto"
-               value="@Model.TeamNumber" min="1" max="10" style="max-width: 140px;" />
+        <input type="number" id="teamNumber" class="form-control team-input mx-auto" value="@Model.TeamNumber"
+               min="1" max="10" style="max-width: 140px;" onchange="loadTeamBudget()" />
     </div>
 
     <div class="board-wrapper text-center">
@@ -119,81 +146,199 @@
                 }
             }
         </div>
-        <div class="board-label mt-3">PIXELBOARD <small>(16 × 16) <span id="liveIndicator">🔴 Live</span></small></div>
+        <div class="board-label mt-3">
+            PIXELBOARD <small>(16 × 16)</small>
+            <span id="liveIndicator">🔴 Live</span>
+        </div>
     </div>
 </div>
 
+<style>
+    .pixel {
+        width: 25px;
+        height: 25px;
+        border: 1px solid #333;
+        display: inline-block;
+        margin: 1px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .pixel:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+    .budget-bar {
+        height: 20px;
+        background: #e5e7eb;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .budget-fill {
+        height: 100%;
+        transition: width 0.5s ease;
+        border-radius: 10px;
+    }
+
+    .mode-btn {
+        margin: 0 5px;
+    }
+
+        .mode-btn.active {
+            background: #0d6efd;
+            color: white;
+        }
+
+    .log-content {
+        background: #f8f9fa;
+        border-radius: 5px;
+        padding: 10px;
+        font-family: monospace;
+    }
+
+    .board-container {
+        display: flex;
+        flex-wrap: wrap;
+        max-width: 450px;
+        margin: 0 auto;
+    }
+
+    .status-grid {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+    }
+</style>
+
 @section Scripts {
     <script>
-        let logCounter = 0;
-        let initialLoadDone = false;
-        let currentMode = 'cache';
-        let eventSource = null;
-        let pixels = @Html.Raw(Json.Serialize(Model.Pixels));
+        let logCounter = 0, eventSource = null, myTeamBudget = 100, currentMode = 'cache';
 
-        // 🔥 MS4 A1.2.2 - SSE LIVE UPDATES
         function initSSE() {
-            if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
-                eventSource = new EventSource('/sse/pixels');
+            if (eventSource?.readyState === EventSource.OPEN) return;
 
-                eventSource.onopen = () => {
-                    updateLiveStatus('🟢 Live', 'bg-success');
-                    addLog('🔥 SSE Live-Updates verbunden (MS4 A1.2.2)', 'success');
-                };
+            eventSource = new EventSource('/sse/pixels');
+            eventSource.onopen = () => {
+                document.getElementById('liveStatus').textContent = '🟢 Live';
+                document.getElementById('liveStatus').className = 'badge bg-success';
+                addLog('🔥 SSE Live-Updates verbunden (MS4)', 'success');
+            };
 
-                eventSource.onmessage = (event) => {
-                    try {
-                        const update = JSON.parse(event.data);
-                        updatePixelLive(update.x, update.y, update.red, update.green, update.blue);
-                        updateLiveStatus(`🔵 Update (${update.x},${update.y})`, 'bg-info');
-                    } catch (e) {
-                        console.error('SSE Parse Error:', e);
-                    }
-                };
+            eventSource.onmessage = (event) => {
+                const update = JSON.parse(event.data);
+                updatePixelLive(update.x, update.y, update.red, update.green, update.blue);
+            };
 
-                eventSource.onerror = () => {
-                    updateLiveStatus('🔴 Getrennt', 'bg-danger');
-                    addLog('⚠️ SSE getrennt, verbinde neu...', 'warning');
-                    setTimeout(initSSE, 2000);
-                };
-            }
+            eventSource.onerror = () => {
+                document.getElementById('liveStatus').textContent = '🔴 Getrennt';
+                document.getElementById('liveStatus').className = 'badge bg-danger';
+                setTimeout(initSSE, 2000);
+            };
         }
 
         function updatePixelLive(x, y, r, g, b) {
-            const element = document.getElementById(`pixel-${x}-${y}`);
-            if (element) {
-                const color = `rgb(${r},${g},${b})`;
-                element.style.backgroundColor = color;
-
-                // Animation für Live-Updates
-                element.style.boxShadow = '0 0 10px rgba(255,255,255,0.8)';
-                setTimeout(() => {
-                    element.style.boxShadow = '';
-                }, 500);
-
-                addLog(`🔴 LIVE: (${x},${y}) -> rgb(${r},${g},${b}) von anderem Client`, 'info');
+            const pixel = document.getElementById(`pixel-${x}-${y}`);
+            if (pixel) {
+                pixel.style.backgroundColor = `rgb(${r},${g},${b})`;
+                pixel.style.boxShadow = '0 0 15px white';
+                setTimeout(() => pixel.style.boxShadow = '', 500);
+                addLog(`🔴 LIVE (${x},${y}): rgb(${r},${g},${b})`, 'info');
             }
-            pixels[x][y] = { red: r, green: g, blue: b };
         }
 
-        function updateLiveStatus(status, badgeClass) {
-            document.getElementById('liveStatus').textContent = status;
-            document.getElementById('liveStatus').className = `badge ${badgeClass}`;
-            document.getElementById('liveIndicator').textContent = status.split(' ')[0];
+        async function loadTeamBudget() {
+            const teamId = document.getElementById('teamNumber').value;
+            try {
+                const resp = await fetch(`/Index?handler=TeamBudget&teamId=${teamId}`);
+                const data = await resp.json();
+                myTeamBudget = parseInt(data.budgetRemaining) || 100;
+
+                const percent = Math.max(0, (myTeamBudget / 100) * 100);
+                const bar = document.getElementById('budgetBar');
+                const text = document.getElementById('budgetText');
+
+                bar.style.width = `${percent}%`;
+                text.textContent = `${myTeamBudget} / 100`;
+
+                if (myTeamBudget < 10) {
+                    bar.style.background = 'linear-gradient(90deg, #f59e0b, #d97706)';
+                    addLog('⚠️ LOW BUDGET WARNING!', 'warning');
+                }
+
+                addLog(`Team ${teamId} Budget: ${myTeamBudget}/100`, 'success');
+            } catch(e) {
+                addLog('Budget API Fehler', 'error');
+            }
         }
 
-        // 🔥 MS4 A2.1 - Token Ablauf erkennen
-        function checkTokenExpiry() {
-            fetch('/api/auth/token-status')
-                .then(res => res.json())
-                .then(data => {
-                    if (data.expired) {
-                        addLog('🕐 TOKEN ABGELAUFEN - Auto-Refresh... (MS4 A2.1)', 'warning');
-                    } else if (data.expiresIn < 60) {
-                        addLog(`⏳ Token läuft in ${data.expiresIn}s ab (MS4 A2.1)`, 'warning');
-                    }
-                })
-                .catch(() => {});
+        async function loadLeaderboard() {
+            try {
+                const resp = await fetch('/api/teams/leaderboard');
+                const teams = await resp.json();
+
+                const tbody = document.getElementById('leaderboardBody');
+                tbody.innerHTML = '';
+
+                teams.sort((a,b) => b.points - a.points).forEach((team, i) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${i+1}.</td>
+                        <td><span class="badge fs-6 px-3 py-2" style="background: rgb(${team.color?.r||0},${team.color?.g||0},${team.color?.b||0})">
+                            #${team.id} ${team.name}
+                        </span></td>
+                        <td><strong>${team.points || 0}</strong></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                if (teams.length) {
+                    addLog(`${teams[0].name} führt die Rangliste!`, 'success');
+                }
+            } catch(e) {
+                addLog('Rangliste Fehler', 'error');
+            }
+        }
+
+        async function setPixel(x, y) {
+            if (myTeamBudget <= 0) {
+                addLog('❌ KEIN BUDGET MEHR!', 'error');
+                return;
+            }
+
+            const team = document.getElementById('teamNumber').value;
+            addLog(`🎯 Pixel (${x},${y}) Team ${team}...`, 'info');
+
+            try {
+                const resp = await fetch('/api/pixel/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ x, y, team: parseInt(team) })
+                });
+
+                const result = await resp.json();
+                if (result.success) {
+                    addLog(`✅ Pixel (${x},${y}) gesetzt!`, 'success');
+                    loadTeamBudget();
+                } else {
+                    addLog(`❌ ${result.error || 'Unbekannter Fehler'}`, 'error');
+                }
+            } catch(e) {
+                addLog(`❌ Netzwerk Fehler: ${e.message}`, 'error');
+            }
+        }
+
+        async function checkTokenExpiry() {
+            try {
+                const resp = await fetch('/api/auth/token-status');
+                const data = await resp.json();
+                if (data.expired) {
+                    addLog('🕐 TOKEN ABGELAUFEN - Login erforderlich (MS4)', 'warning');
+                } else if (data.expiresIn < 60) {
+                    addLog(`⏳ Token läuft in ${data.expiresIn}s ab`, 'warning');
+                }
+            } catch(e) {}
         }
 
         function addLog(message, type = 'info') {
@@ -203,181 +348,64 @@
 
             if (logCounter === 1) logBox.innerHTML = '';
 
-            const colors = {
-                'info': '#0dcaf0', 'success': '#198754', 'error': '#dc3545', 'warning': '#ffc107'
-            };
-
+            const colors = { info: '#0dcaf0', success: '#198754', error: '#dc3545', warning: '#ffc107' };
             const logEntry = document.createElement('div');
-            logEntry.style.marginBottom = '5px';
-            logEntry.style.borderLeft = `3px solid ${colors[type] || colors['info']}`;
-            logEntry.style.paddingLeft = '8px';
+            logEntry.style.cssText = `
+                margin-bottom: 5px; border-left: 3px solid ${colors[type] || '#0dcaf0'};
+                padding-left: 8px; font-size: 0.9em;
+            `;
             logEntry.innerHTML = `<small>[${timestamp}] ${message}</small>`;
 
             logBox.insertBefore(logEntry, logBox.firstChild);
-            while (logBox.children.length > 10) logBox.removeChild(logBox.lastChild);
+            logBox.scrollTop = 0;
+
+            while (logBox.children.length > 15) logBox.removeChild(logBox.lastChild);
         }
 
-        // [ALLE BESTEHENDEN FUNKTIONEN BLEIBEN GLEICH - clearCacheAndReload, startGame, setPixel, loadPixelsByMode, updatePixels, checkIfBoardIsBlack]
-
-        function clearCacheAndReload() {
-            setTimeout(() => location.reload(true), 500);
-            addLog("Cache gelöscht & Seite wird neu geladen", "info");
-        }
-
-        function startGame() {
-            addLog("Game-Modus aktiviert (Platzhalter)", "success");
-        }
-
-        async function setPixel(x, y) {
-            const team = document.getElementById('teamNumber').value;
-            addLog(`Pixel (${x},${y}) wird gesetzt...`, 'info');
-
-            try {
-                const response = await fetch('/api/pixel/set', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ x: x, y: y, team: parseInt(team) })
-                });
-
-                if (!response.ok) {
-                    let message = `HTTP ${response.status}`;
-                    try {
-                        const body = await response.json();
-                        if (body.error_description) message += ` – ${body.error_description}`;
-                        else if (body.message) message += ` – ${body.message}`;
-                    } catch {
-                        const text = await response.text();
-                        if (text) message += ` – ${text}`;
-                    }
-                    addLog(`❌ ${message}`, 'error');
-                    return;
-                }
-
-                const result = await response.json();
-                if (result.success) {
-                    addLog(`✅ Pixel (${x},${y}) erfolgreich gesetzt!`, 'success');
-                    const element = document.getElementById(`pixel-${x}-${y}`);
-                    if (element && result.red !== undefined) {
-                        const rgbColor = `rgb(${result.red}, ${result.green}, ${result.blue})`;
-                        element.style.backgroundColor = rgbColor;
-                        element.style.opacity = '0.5';
-                        element.style.transform = 'scale(0.9)';
-                        setTimeout(() => {
-                            element.style.opacity = '1';
-                            element.style.transform = 'scale(1)';
-                        }, 300);
-                    }
-                } else {
-                    addLog(`Fehler: ${result.error}`, 'error');
-                }
-            } catch (error) {
-                addLog(`Request Fehler: ${error.message}`, 'error');
-            }
-        }
-
-        async function loadPixelsByMode(mode) {
-            currentMode = mode;
-            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            addLog(`Lade Pixels im Modus: ${mode}...`, 'info');
-
-            try {
-                const response = await fetch(`/index?handler=LoadPixels&mode=${mode}`);
-                const result = await response.json();
-                if (!result.success) {
-                    addLog(`Fehler beim Laden: ${result.error}`, 'error');
-                    return;
-                }
-                addLog(`Pixels geladen in ${result.loadTimeMs}ms (${mode})`, 'success');
-                updatePixels(result.pixels);
-                document.querySelector('.text-success').textContent = `${result.loadTimeMs} ms`;
-            } catch (error) {
-                addLog(`Request Fehler: ${error.message}`, 'error');
-            }
-        }
-
-        function updatePixels(pixelList) {
-            pixelList.forEach(p => {
-                const element = document.getElementById(`pixel-${p.x}-${p.y}`);
-                if (element) {
-                    element.style.backgroundColor = `rgb(${p.red}, ${p.green}, ${p.blue})`;
-                }
-            });
-        }
-
-        function checkIfBoardIsBlack() {
-            let allBlack = true, coloredPixels = 0;
-            for (let x = 0; x < 16; x++) {
-                for (let y = 0; y < 16; y++) {
-                    const element = document.getElementById(`pixel-${x}-${y}`);
-                    if (element) {
-                        const bgColor = element.style.backgroundColor;
-                        if (bgColor !== 'rgb(0, 0, 0)' && bgColor !== 'rgb(0,0,0)' && bgColor !== '') {
-                            allBlack = false;
-                            coloredPixels++;
-                        }
-                    }
-                }
-            }
-            if (allBlack && !initialLoadDone) {
-                addLog('Board ist noch schwarz. Drücken Sie F5 zum Neuladen.', 'warning');
-            } else {
-                initialLoadDone = true;
-                addLog(`Board geladen mit ${coloredPixels} farbigen Pixels!`, 'success');
-            }
-        }
-
-        // 🔥 MS4 INITIALIZATION
         window.addEventListener('DOMContentLoaded', () => {
-            addLog('🚀 MS4 Pixelboard Client bereit - Live Updates aktiviert!', 'success');
+            addLog('🚀 MS3+MS4+MS5 Pixelboard bereit!', 'success');
 
-            // Mode Buttons
             document.querySelectorAll('.mode-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
-                    const mode = this.getAttribute('data-mode');
-                    loadPixelsByMode(mode);
+                    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
                 });
             });
 
-            // SSE nur wenn authenticated
+            loadTeamBudget();
+            loadLeaderboard();
+
             @if (Model.IsAuthenticated)
             {
-                    <text>initSSE();</text>
+                <text>initSSE();</text>
             }
-
-            setTimeout(checkIfBoardIsBlack, 500);
-
-            // Token expiry check alle 30s (MS4 A2.1)
             setInterval(checkTokenExpiry, 30000);
-        });
+            setInterval(() => { loadTeamBudget(); loadLeaderboard(); }, 30000);
 
-        // Auth status polling
-        setInterval(() => {
-            fetch('/api/auth/status')
-                .then(res => res.json())
-                .then(data => {
-                    const statusBadge = document.getElementById('authStatus');
-                    if (statusBadge) {
-                        if (data.authenticated) {
-                            statusBadge.textContent = `✅ ${data.username}`;
-                            statusBadge.className = 'badge bg-success';
-                            if (!eventSource) initSSE(); // SSE nach Login starten
-                        } else {
-                            statusBadge.textContent = '❌ Gast';
-                            statusBadge.className = 'badge bg-danger';
-                        }
+            setInterval(async () => {
+                try {
+                    const resp = await fetch('/api/auth/status');
+                    const data = await resp.json();
+                    const badge = document.getElementById('authStatus');
+                    if (data.authenticated) {
+                        badge.textContent = `✅ ${data.username}`;
+                        badge.className = 'badge bg-success';
+                        if (!eventSource) initSSE();
+                    } else {
+                        badge.textContent = '❌ Gast';
+                        badge.className = 'badge bg-danger';
                     }
-                });
-        }, 2000);
+                } catch(e) {}
+            }, 5000);
 
-        // Login required für Pixel clicks
-        window.addEventListener('click', function(e) {
-            if (e.target.classList.contains('pixel') &&
-                document.getElementById('authStatus').textContent.includes('Gast')) {
-                if (confirm('Login erforderlich. Zum Keycloak?')) {
-                    window.location.href = '/Index?handler=Login';
+            document.addEventListener('click', e => {
+                if (e.target.classList.contains('pixel') &&
+                    document.getElementById('authStatus').textContent.includes('Gast')) {
+                    if (confirm('Login erforderlich!')) {
+                        window.location.href = '/Index?handler=Login';
+                    }
                 }
-            }
+            });
         });
     </script>
 }

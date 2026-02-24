@@ -37,7 +37,6 @@ public class PixelController : ControllerBase
 
         var token = await HttpContext.GetTokenAsync("access_token");
 
-        // Token expiry check
         if (!string.IsNullOrEmpty(token) && IsTokenExpired(token))
         {
             _logger.LogWarning("🕐 Token expired, attempting refresh...");
@@ -90,15 +89,12 @@ public class PixelController : ControllerBase
     }
     private async Task<string?> RefreshTokenAsync()
     {
-        // Option 1: Silent refresh via refresh_token (if available)
         var refreshToken = await HttpContext.GetTokenAsync("refresh_token");
         if (!string.IsNullOrEmpty(refreshToken))
         {
-            // Implement refresh logic hier
-            return null; // Placeholder
+            return null;
         }
 
-        // Option 2: Redirect to login
         await HttpContext.ChallengeAsync(OpenIdConnectDefaults.AuthenticationScheme);
         return null;
     }

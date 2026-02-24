@@ -69,13 +69,11 @@ app.MapGet("/sse/pixels", async (IBoardStateService boardState, HttpContext cont
     context.Response.Headers.Append("Cache-Control", "no-cache");
     context.Response.Headers.Append("Connection", "keep-alive");
 
-    // Simuliere Live-Updates alle 5s (für Demo)
     while (!context.RequestAborted.IsCancellationRequested)
     {
         try
         {
             var pixels = boardState.GetAllPixels();
-            // Sende random Pixel-Update (Demo)
             var rand = new Random();
             var x = rand.Next(16);
             var y = rand.Next(16);
@@ -94,7 +92,7 @@ app.MapGet("/sse/pixels", async (IBoardStateService boardState, HttpContext cont
             await context.Response.WriteAsync($"data: {json}\n\n");
             await context.Response.Body.FlushAsync();
 
-            await Task.Delay(5000, context.RequestAborted); // 5s Demo-Updates
+            await Task.Delay(5000, context.RequestAborted);
         }
         catch (Exception ex)
         {
@@ -102,5 +100,4 @@ app.MapGet("/sse/pixels", async (IBoardStateService boardState, HttpContext cont
         }
     }
 }).RequireAuthorization().ExcludeFromDescription();
-
 app.Run();
