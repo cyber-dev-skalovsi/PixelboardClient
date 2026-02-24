@@ -153,42 +153,79 @@ namespace PixelboardClient.Services
         {
             var stopwatch = Stopwatch.StartNew();
 
+            PixelColor[,] newPixels;
+
             try
             {
                 if (_useGraphQL)
                 {
-                    var newPixels = await _graphQLService.LoadAllPixelsAsync();
-
-                    lock (_lock)
-                    {
-                        _pixels = newPixels;
-                    }
+                    newPixels = await _graphQLService.LoadAllPixelsAsync();
                 }
                 else
                 {
-                    await LoadPixelsRestAsync();
+                    var (pixels, _) = await LoadPixelsRestAsync();   // nur pixels zurückgeben
+                    newPixels = pixels;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Fehler beim Laden der Pixels");
-
                 if (_useGraphQL)
                 {
-                    _logger.LogWarning("GraphQL fehlgeschlagen, versuche REST API...");
                     _useGraphQL = false;
-                    await LoadPixelsRestAsync();
+                    var (pixels, _) = await LoadPixelsRestAsync();
+                    newPixels = pixels;
+                }
+                else
+                {
+                    return;
                 }
             }
 
-            stopwatch.Stop();
-            _logger.LogInformation("Alle 256 Pixels geladen in {ms}ms (Methode: {method})",
-                stopwatch.ElapsedMilliseconds,
-                _useGraphQL ? "GraphQL" : "REST");
-        }
+            // ── Change Detection + Push ────────────────────────────────────────
+            var changes = new List<PixelUpdate>();
 
-        private async Task LoadPixelsRestAsync()
+            lock (_lock)
+            {
+                for (int x = 0; x < 16; x++)
+                {
+                    for (int y = 0; y < 16; y++)
+                    {
+                        var oldColor = _pixels[x, y];
+                        var newColor = newPixels[x, y];
+
+                        if (oldColor.Red != newColor.Red ||
+                            oldColor.Green != newColor.Green ||
+                            oldColor.Blue != newColor.Blue)
+                        {
+                            changes.Add(new PixelUpdate(
+                                            x,
+                                            y,
+                                            newColor.Red,
+                                            newColor.Green,
+                                            newColor.Blue
+                                        ));
+                        }
+                    }
+                }
+
+                // Update des Caches
+                _pixels = newPixels;
+            }
+
+            // Push an SSE-Clients
+            foreach (var change in changes)
+            {
+                await _pixelUpdateChannel.Writer.WriteAsync(change);
+            }
+
+            stopwatch.Stop();
+            _logger.LogInformation("Pixels aktualisiert in {ms}ms – {changes} Änderungen gepusht",
+                stopwatch.ElapsedMilliseconds, changes.Count);
+        }
+        private async Task<(PixelColor[,] pixels, long elapsedMs)> LoadPixelsRestAsync()
         {
+            var stopwatch = Stopwatch.StartNew();
             var client = _httpClientFactory.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(30);
 
@@ -205,19 +242,16 @@ namespace PixelboardClient.Services
             }
 
             var results = await Task.WhenAll(tasks);
+            var pixels = new PixelColor[16, 16];
 
-            lock (_lock)
+            foreach (var (x, y, color) in results)
             {
-                foreach (var (x, y, color) in results)
-                {
-                    if (color != null)
-                    {
-                        _pixels[x, y] = color;
-                    }
-                }
+                pixels[x, y] = color ?? new PixelColor(0, 0, 0);
             }
-        }
 
+            stopwatch.Stop();
+            return (pixels, stopwatch.ElapsedMilliseconds);
+        }
         private async Task<(int x, int y, PixelColor? color)> FetchPixelAsync(
             HttpClient client, int x, int y)
         {
