@@ -21,3 +21,5 @@ x86/
 ## JetBrains Rider
 .idea/
 *.sln.iml
+PixelboardClient/appsettings.Development.json
+PixelboardClient/appsettings.json

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PixelboardClient.Models;
 using System.Text;
@@ -28,54 +29,32 @@ public class PixelController : ControllerBase
     [HttpPost("set")]
     public async Task<IActionResult> SetPixel([FromBody] SetPixelRequest req)
     {
-        if (req is null || req.X < 0 || req.X >= 16 || req.Y < 0 || req.Y >= 16 || req.Team < 1)
-            return BadRequest("Invalid pixel coordinates or team number");
+        _logger.LogInformation("🔥 SETPIXEL START - X:{X} Y:{Y} Team:{Team}", req.X, req.Y, req.Team);
 
-        try
+        var baseUrl = _config["ApiUrl"]?.TrimEnd('/') ?? throw new InvalidOperationException("ApiUrl missing");
+        using var client = _httpFactory.CreateClient();
+
+        var token = await HttpContext.GetTokenAsync("access_token");
+        if (string.IsNullOrEmpty(token))
         {
-            var baseUrl = _config["ApiUrl"]?.TrimEnd('/')
-                ?? throw new InvalidOperationException("ApiUrl missing");
-
-            using var client = _httpFactory.CreateClient();
-
-            var payload = new { x = req.X, y = req.Y, team = req.Team };
-            var json = JsonSerializer.Serialize(payload);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            var resp = await client.PostAsync($"{baseUrl}/api/color", content);
-
-            var body = await resp.Content.ReadAsStringAsync();
-
-            if (!resp.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("Pixel set failed: {status} – {body}", resp.StatusCode, body);
-                return Ok(new { success = false, error = body });
-            }
-
-            // Try to get current color after set
-            var colorResp = await client.GetAsync($"{baseUrl}/api/color/{req.X}/{req.Y}");
-            if (!colorResp.IsSuccessStatusCode)
-                return Ok(new { success = true, message = body });
-
-            var colorJson = await colorResp.Content.ReadAsStringAsync();
-            var color = TryParseColorResponse(colorJson);
-
-            return Ok(new
-            {
-                success = true,
-                message = body,
-                red = color?.Red,
-                green = color?.Green,
-                blue = color?.Blue
-            });
+            _logger.LogError("❌ ACCESS_TOKEN fehlt!");
+            return Ok(new { success = false, error = "Kein access_token verfügbar" });
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Set pixel ({x},{y}) failed", req.X, req.Y);
-            return Ok(new { success = false, error = ex.Message });
-        }
+
+        _logger.LogInformation("✅ ACCESS_TOKEN gefunden: {Length} Zeichen", token.Length);
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var payload = new { X = req.X, Y = req.Y, Team = req.Team, Red = 0, Green = 0, Blue = 0 };
+        var json = JsonSerializer.Serialize(payload);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        var resp = await client.PostAsync($"{baseUrl}/api/color", content);
+        var body = await resp.Content.ReadAsStringAsync();
+
+        _logger.LogInformation("✅ Response: {Status} {Body}", (int)resp.StatusCode, body);
+
+        return Ok(new { success = resp.IsSuccessStatusCode, message = body, httpStatus = (int)resp.StatusCode });
     }
-
     private static PixelColor? TryParseColorResponse(string json)
     {
         try
@@ -100,5 +79,12 @@ public class PixelController : ControllerBase
         }
     }
 
-    public record SetPixelRequest(int X, int Y, int Team);
+    public record SetPixelRequest(
+        int X,
+        int Y,
+        int Team,
+        int? Red = null,
+        int? Green = null,
+        int? Blue = null 
+);
 }

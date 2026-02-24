@@ -16,7 +16,7 @@ namespace PixelboardClient.Pages
     public class IndexModel : PageModel
     {
         private readonly ILogger<IndexModel> _logger;
-        private readonly IBoardStateService _boardStateService;  // ← Das fehlte!
+        private readonly IBoardStateService _boardStateService;
         private readonly IConfiguration _configuration;
 
         public PixelColor[,] Pixels { get; set; } = new PixelColor[16, 16];
@@ -33,14 +33,18 @@ namespace PixelboardClient.Pages
 
         public IndexModel(
             ILogger<IndexModel> logger,
-            IBoardStateService boardStateService,     // ← JETZT registriert!
+            IBoardStateService boardStateService,
             IConfiguration configuration)
         {
             _logger = logger;
             _boardStateService = boardStateService;
             _configuration = configuration;
         }
-
+        public IActionResult OnGetIdToken()
+        {
+            var idToken = HttpContext.GetTokenAsync("id_token").Result;
+            return Content($"ID_TOKEN:\n{idToken}\n\nDECODE AUF jwt.io");
+        }
         public void OnGet()
         {
             try

@@ -33,6 +33,9 @@
                 <div class="d-flex gap-2 flex-wrap">
                     <span class="small text-muted">User: @Model.UserName</span>
                     <span class="small text-muted">ID: @Model.UserId</span>
+                    <a href="/Index?handler=IdToken" class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+                        📋 ID Token (MS3)
+                    </a>
                     <form asp-page-handler="Logout" method="post" class="d-inline">
                         <button type="submit" class="btn btn-sm btn-outline-danger">Logout</button>
                     </form>
