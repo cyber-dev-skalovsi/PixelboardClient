@@ -65,28 +65,33 @@ namespace PixelboardClient.Services
 
                         if (response.Errors?.Any() == true)
                         {
-                            _logger.LogError("Fehler bei Pixel ({x},{y}): {err}", x, y, response.Errors.First().Message);
-                            pixels[x, y] = new PixelColor(255, 0, 255);
+                            _logger.LogError("GraphQL Fehler bei Pixel ({x},{y}): {err}", x, y, response.Errors.First().Message);
+                            pixels[x, y] = new PixelColor(255, 0, 255); // Magenta = Error
                             continue;
                         }
 
                         var p = response.Data?.Pixel;
-                        if (p != null)
+                        if (p?.Color != null)
                         {
                             pixels[x, y] = new PixelColor(p.Color.Red, p.Color.Green, p.Color.Blue);
                         }
+                        else
+                        {
+                            pixels[x, y] = new PixelColor(0, 0, 0);
+                        }
                     }
                 }
-
-                _logger.LogInformation("GraphQL: Alle 256 Pixels geladen (einzeln)");
-                return pixels;
+                _logger.LogInformation("GraphQL: Alle 256 Pixels geladen");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "GraphQL Batch-Laden fehlgeschlagen");
-                return pixels;
+                _logger.LogError(ex, "GraphQL komplett fehlgeschlagen - Fallback REST");
+                // REST Fallback passiert in BoardStateService
             }
+
+            return pixels;
         }
+
 
         public class PixelRangeResponse
         {

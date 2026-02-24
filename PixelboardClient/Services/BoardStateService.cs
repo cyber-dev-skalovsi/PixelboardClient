@@ -1,5 +1,6 @@
 ﻿using PixelboardClient.Models;
 using System.Diagnostics;
+using System.Threading.Channels;
 
 namespace PixelboardClient.Services
 {
@@ -33,7 +34,15 @@ namespace PixelboardClient.Services
                 }
             }
         }
+        private readonly Channel<PixelUpdate> _pixelUpdateChannel = Channel.CreateUnbounded<PixelUpdate>();
 
+        public record PixelUpdate(int X, int Y, int Red, int Green, int Blue);
+
+        // In LoadPixelsAsync(), nach Pixel-Update:
+        private async Task NotifyPixelUpdate(int x, int y, PixelColor color)
+        {
+            await _pixelUpdateChannel.Writer.WriteAsync(new PixelUpdate(x, y, color.Red, color.Green, color.Blue));
+        }
         public PixelColor? Pixel(int x, int y)
         {
             if (x < 0 || x >= 16 || y < 0 || y >= 16)

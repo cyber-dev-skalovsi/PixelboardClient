@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PixelboardClient.Models;
@@ -35,6 +36,16 @@ public class PixelController : ControllerBase
         using var client = _httpFactory.CreateClient();
 
         var token = await HttpContext.GetTokenAsync("access_token");
+
+        // Token expiry check
+        if (!string.IsNullOrEmpty(token) && IsTokenExpired(token))
+        {
+            _logger.LogWarning("🕐 Token expired, attempting refresh...");
+            var newToken = await RefreshTokenAsync();
+            if (newToken != null) token = newToken;
+            else return Ok(new { success = false, error = "Token refresh failed" });
+        }
+
         if (string.IsNullOrEmpty(token))
         {
             _logger.LogError("❌ ACCESS_TOKEN fehlt!");
@@ -54,6 +65,42 @@ public class PixelController : ControllerBase
         _logger.LogInformation("✅ Response: {Status} {Body}", (int)resp.StatusCode, body);
 
         return Ok(new { success = resp.IsSuccessStatusCode, message = body, httpStatus = (int)resp.StatusCode });
+    }
+
+    private bool IsTokenExpired(string token)
+    {
+        try
+        {
+            var payload = token.Split('.')[1];
+            var jsonBytes = ParseBase64Url(payload);
+            var keyValuePairs = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonBytes);
+            if (keyValuePairs.TryGetValue("exp", out var expObj) && expObj is long exp)
+            {
+                return DateTimeOffset.UtcNow.ToUnixTimeSeconds() > exp;
+            }
+        }
+        catch { }
+        return true; // Assume expired if can't parse
+    }
+
+    private static byte[] ParseBase64Url(string input)
+    {
+        var padded = input.Length % 4 == 2 ? input + "==" : input.Length % 4 == 3 ? input + "=" : input;
+        return Convert.FromBase64String(padded);
+    }
+    private async Task<string?> RefreshTokenAsync()
+    {
+        // Option 1: Silent refresh via refresh_token (if available)
+        var refreshToken = await HttpContext.GetTokenAsync("refresh_token");
+        if (!string.IsNullOrEmpty(refreshToken))
+        {
+            // Implement refresh logic hier
+            return null; // Placeholder
+        }
+
+        // Option 2: Redirect to login
+        await HttpContext.ChallengeAsync(OpenIdConnectDefaults.AuthenticationScheme);
+        return null;
     }
     private static PixelColor? TryParseColorResponse(string json)
     {

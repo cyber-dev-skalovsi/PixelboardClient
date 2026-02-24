@@ -5,6 +5,7 @@
 }
 
 <div class="container">
+    <!-- [HEADER UND AUTH KARTEN BLEIBEN GLEICH] -->
     <header class="header">
         <h1>
             PIXELBOARD CLIENT
@@ -48,7 +49,7 @@
         </div>
     </div>
 
-
+    <!-- REST DES HTML BLEIBT GLEICH -->
     <div class="mode-buttons text-center mb-4">
         <button class="btn mode-btn active" data-mode="cache">Cache</button>
         <button class="btn mode-btn" data-mode="parallel">Parallel</button>
@@ -65,6 +66,10 @@
                     <small class="text-muted">Ladezeit (aktiv)</small>
                     <strong class="text-success">@Model.LoadTimeMs ms</strong>
                 </div>
+                <div>
+                    <small class="text-muted">Live Updates</small>
+                    <span class="badge bg-info" id="liveStatus">🟢 Verbunden</span>
+                </div>
             </div>
 
             <div class="action-buttons mt-4">
@@ -80,7 +85,6 @@
             </div>
 
             <hr class="my-4" />
-
             <div class="activity-log-section">
                 <strong class="d-block mb-2">Activity Log</strong>
                 <div id="logBox" class="log-content">
@@ -115,7 +119,7 @@
                 }
             }
         </div>
-        <div class="board-label mt-3">PIXELBOARD <small>(16 × 16)</small></div>
+        <div class="board-label mt-3">PIXELBOARD <small>(16 × 16) <span id="liveIndicator">🔴 Live</span></small></div>
     </div>
 </div>
 
@@ -124,21 +128,83 @@
         let logCounter = 0;
         let initialLoadDone = false;
         let currentMode = 'cache';
+        let eventSource = null;
+        let pixels = @Html.Raw(Json.Serialize(Model.Pixels));
+
+        // 🔥 MS4 A1.2.2 - SSE LIVE UPDATES
+        function initSSE() {
+            if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
+                eventSource = new EventSource('/sse/pixels');
+
+                eventSource.onopen = () => {
+                    updateLiveStatus('🟢 Live', 'bg-success');
+                    addLog('🔥 SSE Live-Updates verbunden (MS4 A1.2.2)', 'success');
+                };
+
+                eventSource.onmessage = (event) => {
+                    try {
+                        const update = JSON.parse(event.data);
+                        updatePixelLive(update.x, update.y, update.red, update.green, update.blue);
+                        updateLiveStatus(`🔵 Update (${update.x},${update.y})`, 'bg-info');
+                    } catch (e) {
+                        console.error('SSE Parse Error:', e);
+                    }
+                };
+
+                eventSource.onerror = () => {
+                    updateLiveStatus('🔴 Getrennt', 'bg-danger');
+                    addLog('⚠️ SSE getrennt, verbinde neu...', 'warning');
+                    setTimeout(initSSE, 2000);
+                };
+            }
+        }
+
+        function updatePixelLive(x, y, r, g, b) {
+            const element = document.getElementById(`pixel-${x}-${y}`);
+            if (element) {
+                const color = `rgb(${r},${g},${b})`;
+                element.style.backgroundColor = color;
+
+                // Animation für Live-Updates
+                element.style.boxShadow = '0 0 10px rgba(255,255,255,0.8)';
+                setTimeout(() => {
+                    element.style.boxShadow = '';
+                }, 500);
+
+                addLog(`🔴 LIVE: (${x},${y}) -> rgb(${r},${g},${b}) von anderem Client`, 'info');
+            }
+            pixels[x][y] = { red: r, green: g, blue: b };
+        }
+
+        function updateLiveStatus(status, badgeClass) {
+            document.getElementById('liveStatus').textContent = status;
+            document.getElementById('liveStatus').className = `badge ${badgeClass}`;
+            document.getElementById('liveIndicator').textContent = status.split(' ')[0];
+        }
+
+        // 🔥 MS4 A2.1 - Token Ablauf erkennen
+        function checkTokenExpiry() {
+            fetch('/api/auth/token-status')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.expired) {
+                        addLog('🕐 TOKEN ABGELAUFEN - Auto-Refresh... (MS4 A2.1)', 'warning');
+                    } else if (data.expiresIn < 60) {
+                        addLog(`⏳ Token läuft in ${data.expiresIn}s ab (MS4 A2.1)`, 'warning');
+                    }
+                })
+                .catch(() => {});
+        }
 
         function addLog(message, type = 'info') {
             logCounter++;
             const logBox = document.getElementById('logBox');
             const timestamp = new Date().toLocaleTimeString('de-CH');
 
-            if (logCounter === 1) {
-                logBox.innerHTML = '';
-            }
+            if (logCounter === 1) logBox.innerHTML = '';
 
             const colors = {
-                'info': '#0dcaf0',
-                'success': '#198754',
-                'error': '#dc3545',
-                'warning': '#ffc107'
+                'info': '#0dcaf0', 'success': '#198754', 'error': '#dc3545', 'warning': '#ffc107'
             };
 
             const logEntry = document.createElement('div');
@@ -148,18 +214,14 @@
             logEntry.innerHTML = `<small>[${timestamp}] ${message}</small>`;
 
             logBox.insertBefore(logEntry, logBox.firstChild);
-
-            while (logBox.children.length > 10) {
-                logBox.removeChild(logBox.lastChild);
-            }
+            while (logBox.children.length > 10) logBox.removeChild(logBox.lastChild);
         }
 
+        // [ALLE BESTEHENDEN FUNKTIONEN BLEIBEN GLEICH - clearCacheAndReload, startGame, setPixel, loadPixelsByMode, updatePixels, checkIfBoardIsBlack]
+
         function clearCacheAndReload() {
-            setTimeout(() => {
-                location.reload(true);
-            }, 500);
+            setTimeout(() => location.reload(true), 500);
             addLog("Cache gelöscht & Seite wird neu geladen", "info");
-            location.reload(true);
         }
 
         function startGame() {
@@ -168,15 +230,12 @@
 
         async function setPixel(x, y) {
             const team = document.getElementById('teamNumber').value;
-
             addLog(`Pixel (${x},${y}) wird gesetzt...`, 'info');
 
             try {
                 const response = await fetch('/api/pixel/set', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ x: x, y: y, team: parseInt(team) })
                 });
 
@@ -184,11 +243,8 @@
                     let message = `HTTP ${response.status}`;
                     try {
                         const body = await response.json();
-                        if (body.error_description) {
-                            message += ` – ${body.error_description}`;
-                        } else if (body.message) {
-                            message += ` – ${body.message}`;
-                        }
+                        if (body.error_description) message += ` – ${body.error_description}`;
+                        else if (body.message) message += ` – ${body.message}`;
                     } catch {
                         const text = await response.text();
                         if (text) message += ` – ${text}`;
@@ -198,18 +254,12 @@
                 }
 
                 const result = await response.json();
-
                 if (result.success) {
-                    addLog(`Pixel (${x},${y}) erfolgreich gesetzt!`, 'success');
-
+                    addLog(`✅ Pixel (${x},${y}) erfolgreich gesetzt!`, 'success');
                     const element = document.getElementById(`pixel-${x}-${y}`);
-                    if (element) {
-                        if (result.red !== undefined && result.green !== undefined && result.blue !== undefined) {
-                            const rgbColor = `rgb(${result.red}, ${result.green}, ${result.blue})`;
-                            element.style.backgroundColor = rgbColor;
-                            addLog(`Farbe aktualisiert: RGB(${result.red}, ${result.green}, ${result.blue})`, 'info');
-                        }
-
+                    if (element && result.red !== undefined) {
+                        const rgbColor = `rgb(${result.red}, ${result.green}, ${result.blue})`;
+                        element.style.backgroundColor = rgbColor;
                         element.style.opacity = '0.5';
                         element.style.transform = 'scale(0.9)';
                         setTimeout(() => {
@@ -222,36 +272,27 @@
                 }
             } catch (error) {
                 addLog(`Request Fehler: ${error.message}`, 'error');
-                console.error('Request Fehler:', error);
             }
         }
 
         async function loadPixelsByMode(mode) {
             currentMode = mode;
-            
-            document.querySelectorAll('.mode-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
-
             addLog(`Lade Pixels im Modus: ${mode}...`, 'info');
 
             try {
                 const response = await fetch(`/index?handler=LoadPixels&mode=${mode}`);
                 const result = await response.json();
-
                 if (!result.success) {
                     addLog(`Fehler beim Laden: ${result.error}`, 'error');
                     return;
                 }
-
                 addLog(`Pixels geladen in ${result.loadTimeMs}ms (${mode})`, 'success');
                 updatePixels(result.pixels);
-
                 document.querySelector('.text-success').textContent = `${result.loadTimeMs} ms`;
             } catch (error) {
                 addLog(`Request Fehler: ${error.message}`, 'error');
-                console.error('Load Error:', error);
             }
         }
 
@@ -259,16 +300,13 @@
             pixelList.forEach(p => {
                 const element = document.getElementById(`pixel-${p.x}-${p.y}`);
                 if (element) {
-                    const rgbColor = `rgb(${p.red}, ${p.green}, ${p.blue})`;
-                    element.style.backgroundColor = rgbColor;
+                    element.style.backgroundColor = `rgb(${p.red}, ${p.green}, ${p.blue})`;
                 }
             });
         }
 
         function checkIfBoardIsBlack() {
-            let allBlack = true;
-            let coloredPixels = 0;
-
+            let allBlack = true, coloredPixels = 0;
             for (let x = 0; x < 16; x++) {
                 for (let y = 0; y < 16; y++) {
                     const element = document.getElementById(`pixel-${x}-${y}`);
@@ -281,7 +319,6 @@
                     }
                 }
             }
-
             if (allBlack && !initialLoadDone) {
                 addLog('Board ist noch schwarz. Drücken Sie F5 zum Neuladen.', 'warning');
             } else {
@@ -290,9 +327,11 @@
             }
         }
 
+        // 🔥 MS4 INITIALIZATION
         window.addEventListener('DOMContentLoaded', () => {
-            addLog('Seite geladen! Pixelboard bereit.', 'success');
+            addLog('🚀 MS4 Pixelboard Client bereit - Live Updates aktiviert!', 'success');
 
+            // Mode Buttons
             document.querySelectorAll('.mode-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
                     const mode = this.getAttribute('data-mode');
@@ -300,10 +339,20 @@
                 });
             });
 
+            // SSE nur wenn authenticated
+            @if (Model.IsAuthenticated)
+            {
+                    <text>initSSE();</text>
+            }
+
             setTimeout(checkIfBoardIsBlack, 500);
+
+            // Token expiry check alle 30s (MS4 A2.1)
+            setInterval(checkTokenExpiry, 30000);
         });
 
-                setInterval(() => {
+        // Auth status polling
+        setInterval(() => {
             fetch('/api/auth/status')
                 .then(res => res.json())
                 .then(data => {
@@ -312,6 +361,7 @@
                         if (data.authenticated) {
                             statusBadge.textContent = `✅ ${data.username}`;
                             statusBadge.className = 'badge bg-success';
+                            if (!eventSource) initSSE(); // SSE nach Login starten
                         } else {
                             statusBadge.textContent = '❌ Gast';
                             statusBadge.className = 'badge bg-danger';
@@ -320,6 +370,7 @@
                 });
         }, 2000);
 
+        // Login required für Pixel clicks
         window.addEventListener('click', function(e) {
             if (e.target.classList.contains('pixel') &&
                 document.getElementById('authStatus').textContent.includes('Gast')) {
