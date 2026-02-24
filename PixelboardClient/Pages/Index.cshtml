@@ -4,200 +4,282 @@
     ViewData["Title"] = "Pixelboard Client";
 }
 
-<div class="container">
-    <header class="header">
-        <h1>
-            PIXELBOARD CLIENT
-            <span class="badge dev-badge" environment="Development">DEV</span>
-        </h1>
-    </header>
-
-    @if (Model.ErrorMessage != null)
-    {
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            @Model.ErrorMessage
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
+<style>
+    :root {
+        --bg: #161512;
+        --surface: #1f1d1b;
+        --border: #2e2b28;
+        --accent: #b58863;
+        --text: #d1cfc9;
+        --danger: #c84b31;
+        --success: #51cf66;
+        --warning: #ffca3a;
+        --info: #5b8cb0;
     }
 
-    <div class="card mb-3" style="max-width: 600px; margin: 0 auto;">
+    body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'Noto Sans', sans-serif;
+    }
+
+    .pixel {
+        width: 28px;
+        height: 28px;
+        border: 1px solid var(--border);
+        display: inline-block;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .pixel:hover {
+            transform: scale(1.15);
+            box-shadow: 0 0 12px rgba(255,255,255,0.3);
+        }
+
+    .live-update {
+        animation: pulse 1.8s ease-out;
+    }
+    @@keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(255,255,255,0.7);
+        }
+
+        70% {
+            box-shadow: 0 0 0 12px rgba(255,255,255,0);
+        }
+
+        100% {
+            box-shadow: none;
+        }
+    }
+
+    .budget-bar {
+        height: 20px;
+        background: #333;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .budget-fill {
+        height: 100%;
+        transition: width 0.6s ease;
+    }
+
+    #debugLog {
+        background: #0d0d0d;
+        border: 1px solid #333;
+        color: #aaa;
+        padding: 10px;
+        font-family: monospace;
+        height: 180px;
+        overflow-y: auto;
+        border-radius: 4px;
+    }
+</style>
+
+<div class="container my-4">
+    <h1 class="text-center mb-4">Pixelboard Client</h1>
+
+    <!-- Auth Status -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between">
+            <strong>Auth Status</strong>
+            <span id="authStatus" class="badge bg-danger">○ Gast</span>
+        </div>
+    </div>
+
+    <!-- Budget Dashboard -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <strong>Team #@Model.TeamNumber Budget</strong>
+        </div>
+        <div class="card-body text-center">
+            <div class="budget-bar mb-2">
+                <div id="budgetBar" class="budget-fill" style="width:100%; background: linear-gradient(90deg, #51cf66, #10b981);"></div>
+            </div>
+            <h5 id="budgetText" class="fw-bold">100 / 100</h5>
+            <small class="text-muted">Verbleibende Pixel zum Setzen</small>
+        </div>
+    </div>
+
+    <!-- Leaderboard -->
+    <div class="card mb-5">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <strong>🔐 Auth Status</strong>
-            <span class="badge @(Model.IsAuthenticated ? "bg-success" : "bg-danger")" id="authStatus">
-                @(Model.IsAuthenticated ? "✅ Eingeloggt" : "❌ Gast")
-            </span>
+            <strong>🏆 Rangliste – Live Punkte</strong>
+            <button class="btn btn-sm btn-outline-primary" onclick="loadLeaderboard()">🔄</button>
         </div>
-        <div class="card-body">
-            @if (Model.IsAuthenticated)
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead class="table-dark">
+                        <tr><th>#</th><th>Team</th><th>Punkte</th></tr>
+                    </thead>
+                    <tbody id="leaderboardBody">
+                        <tr><td colspan="3" class="text-center text-muted">Laden...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pixelboard -->
+    <div class="text-center mb-4">
+        <div class="board-container mx-auto" style="max-width: 500px;">
+            @for (int y = 0; y < 16; y++)
             {
-                <div class="d-flex gap-2 flex-wrap">
-                    <span class="small text-muted">User: @Model.UserName</span>
-                    <span class="small text-muted">ID: @Model.UserId</span>
-                    <a href="/Index?handler=IdToken" class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
-                        📋 ID Token (MS3)
-                    </a>
-                    <form asp-page-handler="Logout" method="post" class="d-inline">
-                        <button type="submit" class="btn btn-sm btn-outline-danger">Logout</button>
-                    </form>
-                </div>
-            }
-            else
-            {
-                <a asp-page-handler="Login" class="btn btn-sm btn-primary">Login mit Keycloak</a>
-            }
-        </div>
-    </div>
-
-    <!-- MS5 2.1 Budget Dashboard (exakt aus Onenote) -->
-    <div class="team-stats mb-4">
-        <div class="card mx-auto" style="max-width: 400px;">
-            <div class="card-header">
-                <strong>🎨 Team #@Model.TeamNumber Budget</strong>
-            </div>
-            <div class="card-body text-center">
-                <div class="budget-bar mb-2">
-                    <div id="budgetBar" class="budget-fill" style="width: 100%; background: linear-gradient(90deg, #4ade80, #10b981);"></div>
-                </div>
-                <div id="budgetText" class="h5 fw-bold">100 / 100</div>
-                <small class="text-muted">Verbleibende Pixel zum Setzen</small>
-            </div>
-        </div>
-    </div>
-
-    <div class="mode-buttons text-center mb-4">
-        <button class="btn mode-btn active" data-mode="cache">Cache</button>
-        <button class="btn mode-btn" data-mode="parallel">Parallel</button>
-        <button class="btn mode-btn" data-mode="sequential">Sequentiell</button>
-    </div>
-
-    <!-- MS5 2.2 Leaderboard (exakt aus Onenote) -->
-    <div class="leaderboard mb-5">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between">
-                <strong>🏆 RANG LISTE - Live Punkte</strong>
-                <button class="btn btn-sm btn-outline-primary" onclick="loadLeaderboard()">🔄</button>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm mb-0">
-                        <thead class="table-dark">
-                            <tr><th>#</th><th>Team</th><th>Punkte</th></tr>
-                        </thead>
-                        <tbody id="leaderboardBody">
-                            <tr><td colspan="3" class="text-center text-muted">Laden... (MS5.2.2)</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Rest des Boards (unverändert) -->
-    <div class="team-section text-center mb-5">
-        <label for="teamNumber" class="form-label fw-bold">Team Nummer</label>
-        <input type="number" id="teamNumber" class="form-control team-input mx-auto" value="@Model.TeamNumber"
-               min="1" max="10" style="max-width: 140px;" onchange="loadTeamBudget()" />
-    </div>
-
-    <div class="board-wrapper text-center">
-        <div class="board-container mx-auto">
-            @if (Model.Pixels != null)
-            {
-                for (int y = 0; y < Model.Pixels.GetLength(1); y++)
+                for (int x = 0; x < 16; x++)
                 {
-                    for (int x = 0; x < Model.Pixels.GetLength(0); x++)
-                    {
-                        var pixel = Model.Pixels[x, y];
-                        <div class="pixel"
-                             id="pixel-@x-@y"
-                             data-x="@x" data-y="@y"
-                             style="background-color: rgb(@(pixel?.Red ?? 0), @(pixel?.Green ?? 0), @(pixel?.Blue ?? 0));"
-                             onclick="setPixel(@x, @y)">
-                        </div>
-                    }
+                    var p = Model.Pixels[x, y];
+                    <div class="pixel" id="pixel-@x-@y"
+                         style="background:rgb(@(p?.Red ?? 0),@(p?.Green ?? 0),@(p?.Blue ?? 0))"
+                         onclick="setPixel(@x, @y)"></div>
                 }
             }
         </div>
-        <div class="board-label mt-3">
-            PIXELBOARD <small>(16 × 16)</small>
-            <span id="liveIndicator">🔴 Live</span>
-        </div>
+    </div>
+
+    <!-- Debug Log -->
+    <div class="card">
+        <div class="card-header">Debug Log</div>
+        <div id="debugLog" class="card-body"></div>
     </div>
 </div>
 
-<style>
-    /* Deine alten Styles + Onenote Styles */
-    .pixel { width: 25px; height: 25px; border: 1px solid #333; display: inline-block; margin: 1px; cursor: pointer; transition: all 0.2s; }
-    .pixel:hover { transform: scale(1.1); box-shadow: 0 0 10px rgba(0,0,0,0.5); }
-    .budget-bar { height: 20px; background: #e5e7eb; border-radius: 10px; overflow: hidden; }
-    .budget-fill { height: 100%; transition: width 0.5s ease; border-radius: 10px; }
-    .mode-btn { margin: 0 5px; }
-    .mode-btn.active { background: #0d6efd; color: white; }
-    .log-content { background: #f8f9fa; border-radius: 5px; padding: 10px; font-family: monospace; }
-    .board-container { display: flex; flex-wrap: wrap; max-width: 450px; margin: 0 auto; }
-</style>
+<script>
+    let eventSource = null;
 
-@section Scripts {
-    <script>
-        // Dein vollständiges JS aus Onenote + SSE + Token-Check
-        let logCounter = 0, eventSource = null, myTeamBudget = 100, currentMode = 'cache';
+    function addLog(msg, type = 'info') {
+        const log = document.getElementById('debugLog');
+        const line = document.createElement('div');
+        line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        line.style.color = type === 'success' ? '#51cf66' : type === 'warning' ? '#ffca3a' : type === 'error' ? '#ff6b6b' : '#ccc';
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+    }
 
-        function initSSE() { /* ... dein SSE-Code aus vorher ... */ }
-
-        async function loadTeamBudget() {
-            const teamId = document.getElementById('teamNumber').value;
-            try {
-                const resp = await fetch(`/Index?handler=TeamBudget&teamId=${teamId}`);
-                const data = await resp.json();
-                myTeamBudget = parseInt(data.budgetRemaining) || 100;
-
-                const percent = Math.max(0, (myTeamBudget / 100) * 100);
-                const bar = document.getElementById('budgetBar');
-                const text = document.getElementById('budgetText');
-
-                bar.style.width = `${percent}%`;
-                text.textContent = `${myTeamBudget} / 100`;
-
-                if (myTeamBudget < 10) {
-                    bar.style.background = 'linear-gradient(90deg, #f59e0b, #d97706)';
-                    addLog('⚠️ LOW BUDGET WARNING!', 'warning');
-                }
-
-                addLog(`Team ${teamId} Budget: ${myTeamBudget}/100`, 'success');
-            } catch(e) {
-                addLog('Budget API Fehler', 'error');
-            }
+    function initSSE() {
+        if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
+            eventSource.close();
         }
 
-        async function loadLeaderboard() {
+        eventSource = new EventSource('/sse/pixels');
+
+        eventSource.onopen = () => {
+            addLog('✅ SSE Live-Updates verbunden (MS4 A1.2.2)', 'success');
+        };
+
+        eventSource.onmessage = (event) => {
             try {
-                const resp = await fetch('/api/teams/leaderboard');
-                const teams = await resp.json();
-
-                const tbody = document.getElementById('leaderboardBody');
-                tbody.innerHTML = '';
-
-                teams.sort((a,b) => b.points - a.points).forEach((team, i) => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${i+1}.</td>
-                        <td><span class="badge fs-6 px-3 py-2" style="background: rgb(${team.color?.r||0},${team.color?.g||0},${team.color?.b||0})">
-                            #${team.id} ${team.name}
-                        </span></td>
-                        <td><strong>${team.points || 0}</strong></td>
-                    `;
-                    tbody.appendChild(row);
-                });
-
-                if (teams.length) {
-                    addLog(`${teams[0].name} führt die Rangliste!`, 'success');
+                const data = JSON.parse(event.data);
+                const el = document.getElementById(`pixel-${data.x}-${data.y}`);
+                if (el) {
+                    el.style.backgroundColor = `rgb(${data.red}, ${data.green}, ${data.blue})`;
+                    el.classList.add('live-update');
+                    setTimeout(() => el.classList.remove('live-update'), 1800);
                 }
-            } catch(e) {
-                addLog('Rangliste Fehler', 'error');
+                addLog(`Live: Pixel (${data.x},${data.y}) geändert`, 'info');
+            } catch (err) {
+                addLog('SSE Parse-Fehler: ' + err.message, 'error');
             }
-        }
+        };
 
-        // setPixel, checkTokenExpiry, addLog, DOMContentLoaded – alles wie vorher
-        // (kopiere aus deiner letzten Version, falls du sie hast)
-    </script>
-}
+        eventSource.onerror = () => {
+            addLog('△ SSE Verbindung verloren – reconnect in 2s...', 'warning');
+            setTimeout(initSSE, 2000);
+        };
+    }
+
+    async function loadTeamBudget() {
+        const teamId = document.getElementById('teamNumber')?.value || 1;
+        try {
+            const res = await fetch(`/Index?handler=TeamBudget&teamId=${teamId}`);
+            const data = await res.json();
+            const budget = data.budgetRemaining || 100;
+
+            document.getElementById('budgetText').textContent = `${budget} / 100`;
+            const percent = Math.max(0, Math.min(100, (budget / 100) * 100));
+            const bar = document.getElementById('budgetBar');
+            bar.style.width = `${percent}%`;
+
+            if (budget < 10) {
+                bar.style.background = 'linear-gradient(90deg, #f59e0b, #d97706)';
+                addLog('⚠️ LOW BUDGET – nur noch ' + budget + ' Pixel!', 'warning');
+            } else {
+                bar.style.background = 'linear-gradient(90deg, #51cf66, #10b981)';
+            }
+        } catch (e) {
+            addLog('Budget-Laden fehlgeschlagen', 'error');
+        }
+    }
+
+    async function loadLeaderboard() {
+        try {
+            const res = await fetch('/api/teams/leaderboard');
+            const teams = await res.json();
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = '';
+
+            teams.sort((a, b) => b.points - a.points).forEach((t, i) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${i+1}.</td>
+                    <td>
+                        <span class="badge px-3 py-2" style="background:rgb(${t.color?.r||0},${t.color?.g||0},${t.color?.b||0})">
+                            #${t.id} ${t.name || 'Team '+t.id}
+                        </span>
+                    </td>
+                    <td><strong>${t.points || 0}</strong></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            addLog(`Rangliste geladen – ${teams.length} Teams`, 'success');
+        } catch (e) {
+            addLog('Leaderboard Fehler', 'error');
+        }
+    }
+
+    // Auth Status Polling
+    setInterval(async () => {
+        try {
+            const res = await fetch('/api/auth/status');
+            const data = await res.json();
+            const badge = document.getElementById('authStatus');
+            badge.textContent = data.authenticated ? `● ${data.username}` : '○ Gast';
+            badge.className = data.authenticated ? 'badge bg-success' : 'badge bg-danger';
+        } catch {}
+    }, 5000);
+
+    function checkTokenExpiry() {
+        fetch('/api/auth/token-status')
+            .then(res => res.json())
+            .then(data => {
+                if (data.expired) {
+                    addLog('❌ TOKEN ABGELAUFEN – Auto-Refresh wird versucht (MS4 A2.1)', 'warning');
+                    // Optional: Automatischer Redirect zum Login (Challenge)
+                    if (confirm('Token abgelaufen. Zum Login?')) {
+                        window.location.href = '/Index?handler=Login';
+                    }
+                } else if (data.expiresIn <= 60) {
+                    addLog(`⚠️ Token läuft in ${data.expiresIn} Sekunden ab (MS4 A2.1)`, 'warning');
+                } else {
+                    addLog(`Token läuft noch ${data.expiresIn} Sekunden (MS4 A2.1)`, 'info');
+                }
+            })
+            .catch(err => {
+                addLog('Token-Status Check fehlgeschlagen: ' + err.message, 'error');
+            });
+    }
+
+    // Initialisierung
+    window.addEventListener('DOMContentLoaded', () => {
+        addLog('Pixelboard Client bereit', 'success');
+        loadTeamBudget();
+        loadLeaderboard();
+        initSSE();
+
+        setInterval(checkTokenExpiry, 30000);
+        checkTokenExpiry();
+    });
+</script>

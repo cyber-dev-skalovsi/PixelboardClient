@@ -43,11 +43,13 @@ namespace PixelboardClient.Pages
             _configuration = configuration;
             _httpFactory = httpFactory;
         }
+
         public IActionResult OnGetIdToken()
         {
             var idToken = HttpContext.GetTokenAsync("id_token").Result;
             return Content($"ID_TOKEN:\n{idToken}\n\nDECODE AUF jwt.io");
         }
+
         public void OnGet()
         {
             try
@@ -81,20 +83,8 @@ namespace PixelboardClient.Pages
                 }
             }
         }
-        public IActionResult OnGetLogin()
-        {
-            return Challenge(
-                new AuthenticationProperties { RedirectUri = "/" },
-                OpenIdConnectDefaults.AuthenticationScheme);
-        }
 
-        public IActionResult OnPostLogout()
-        {
-            return SignOut(
-                new AuthenticationProperties { RedirectUri = "/" },
-                CookieAuthenticationDefaults.AuthenticationScheme,
-                OpenIdConnectDefaults.AuthenticationScheme);
-        }
+        // MS5 2.1 - Team Budget (genau wie im Onenote)
         public async Task<IActionResult> OnGetTeamBudget(int teamId = 1)
         {
             try
@@ -119,6 +109,20 @@ namespace PixelboardClient.Pages
             }
         }
 
+        public IActionResult OnGetLogin()
+        {
+            return Challenge(
+                new AuthenticationProperties { RedirectUri = "/" },
+                OpenIdConnectDefaults.AuthenticationScheme);
+        }
+
+        public IActionResult OnPostLogout()
+        {
+            return SignOut(
+                new AuthenticationProperties { RedirectUri = "/" },
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                OpenIdConnectDefaults.AuthenticationScheme);
+        }
 
         public async Task<IActionResult> OnGetLoadPixelsAsync(string mode = "cache")
         {
@@ -166,6 +170,43 @@ namespace PixelboardClient.Pages
                     mode = mode.ToLower()
                 });
             }
+        }
+
+        public async Task<IActionResult> OnPostRegisterPlayerAsync(string gamerTag)
+        {
+            if (string.IsNullOrWhiteSpace(gamerTag))
+                return Content("GamerTag fehlt");
+
+            var idToken = await HttpContext.GetTokenAsync("id_token");
+            var apiUrl = _configuration["ApiUrl"] ?? "https://edu.jakobmeier.ch";
+
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", idToken);
+
+            // Entspricht: { "Name": "hello" }
+            var response = await client.PostAsJsonAsync($"{apiUrl}/api/player/register", new { Name = gamerTag });
+            var content = await response.Content.ReadAsStringAsync();
+
+            return Content($"Status: {response.StatusCode} - Body: {content}");
+        }
+
+        // Milestone 3 – Team registrieren (POST zu /api/team/register)
+        public async Task<IActionResult> OnPostRegisterTeamAsync(string teamName)
+        {
+            if (string.IsNullOrWhiteSpace(teamName))
+                return Content("Teamname fehlt");
+
+            var idToken = await HttpContext.GetTokenAsync("id_token");
+            var apiUrl = _configuration["ApiUrl"] ?? "https://edu.jakobmeier.ch";
+
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", idToken);
+
+            // Analog zum Player – laut Swagger / deinem cURL-Beispiel nur String als Body
+            var response = await client.PostAsJsonAsync($"{apiUrl}/api/team/register", teamName);
+            var content = await response.Content.ReadAsStringAsync();
+
+            return Content($"Status: {response.StatusCode} - Body: {content}");
         }
     }
 }

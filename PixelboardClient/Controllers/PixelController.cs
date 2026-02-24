@@ -37,21 +37,23 @@ public class PixelController : ControllerBase
 
         var token = await HttpContext.GetTokenAsync("access_token");
 
-        if (!string.IsNullOrEmpty(token) && IsTokenExpired(token))
-        {
-            _logger.LogWarning("🕐 Token expired, attempting refresh...");
-            var newToken = await RefreshTokenAsync();
-            if (newToken != null) token = newToken;
-            else return Ok(new { success = false, error = "Token refresh failed" });
-        }
-
         if (string.IsNullOrEmpty(token))
         {
             _logger.LogError("❌ ACCESS_TOKEN fehlt!");
             return Ok(new { success = false, error = "Kein access_token verfügbar" });
         }
 
-        _logger.LogInformation("✅ ACCESS_TOKEN gefunden: {Length} Zeichen", token.Length);
+        if (IsTokenExpired(token))
+        {
+            _logger.LogWarning("🕐 Token abgelaufen – ChallengeAsync auslösen (MS4 A2.2 Strategie 1)");
+
+            await HttpContext.ChallengeAsync(OpenIdConnectDefaults.AuthenticationScheme,
+                new AuthenticationProperties { RedirectUri = HttpContext.Request.Path + HttpContext.Request.QueryString });
+
+            return Unauthorized("Token abgelaufen – Redirect zu Keycloak läuft");
+        }
+
+        _logger.LogInformation("✅ ACCESS_TOKEN gültig: {Length} Zeichen", token.Length);
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
         var payload = new { X = req.X, Y = req.Y, Team = req.Team, Red = 0, Green = 0, Blue = 0 };
@@ -65,7 +67,6 @@ public class PixelController : ControllerBase
 
         return Ok(new { success = resp.IsSuccessStatusCode, message = body, httpStatus = (int)resp.StatusCode });
     }
-
     private bool IsTokenExpired(string token)
     {
         try
